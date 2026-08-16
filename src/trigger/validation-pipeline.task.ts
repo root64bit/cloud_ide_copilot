@@ -1,3 +1,5 @@
+import { task } from "@trigger.dev/sdk";
+
 /**
  * Trigger.dev Long-Running Task: Validation Pipeline
  */
@@ -9,9 +11,8 @@ export interface ValidationPipelinePayload {
   userId: string;
 }
 
-export const validationPipelineTask = {
+export const validationPipelineTask = task({
   id: "validation-pipeline",
-  name: "Run Automated Test/Build Pipeline in Sandbox",
   run: async (payload: ValidationPipelinePayload) => {
     console.log(`[Trigger.dev] Running validation pipeline for workspace: ${payload.workspaceId}`);
     return {
@@ -21,4 +22,4 @@ export const validationPipelineTask = {
       completedAt: new Date().toISOString(),
     };
   },
-};
+});

@@ -1,3 +1,5 @@
+import { task } from "@trigger.dev/sdk";
+
 /**
  * Trigger.dev Long-Running Task: Workspace Lifecycle (Create & Clone)
  */
@@ -11,9 +13,8 @@ export interface WorkspaceLifecyclePayload {
   commitSha: string;
 }
 
-export const workspaceLifecycleTask = {
+export const workspaceLifecycleTask = task({
   id: "workspace-lifecycle",
-  name: "Workspace Lifecycle (Create, Clone & Init)",
   run: async (payload: WorkspaceLifecyclePayload) => {
     console.log(`[Trigger.dev] Initializing workspace sandbox: ${payload.workspaceId}`);
     return {
@@ -23,4 +24,4 @@ export const workspaceLifecycleTask = {
       completedAt: new Date().toISOString(),
     };
   },
-};
+});

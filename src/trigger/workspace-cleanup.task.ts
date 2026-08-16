@@ -1,10 +1,11 @@
+import { schedules } from "@trigger.dev/sdk";
+
 /**
  * Trigger.dev Scheduled Cron Task: Workspace Inactivity & TTL Cleanup
  */
 
-export const workspaceCleanupTask = {
+export const workspaceCleanupTask = schedules.task({
   id: "workspace-cleanup",
-  name: "Cleanup Inactive & Expired Sandboxes",
   cron: "*/15 * * * *", // Run every 15 minutes
   run: async () => {
     console.log("[Trigger.dev] Running workspace cleanup sweep for expired TTL sandboxes...");
@@ -14,4 +15,4 @@ export const workspaceCleanupTask = {
       timestamp: new Date().toISOString(),
     };
   },
-};
+});
