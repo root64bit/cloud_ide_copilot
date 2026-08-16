@@ -32,3 +32,5 @@ next-env.d.ts
 *.key
 *.zip
 Thumbs.db
+
+.vercel
