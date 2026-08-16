@@ -1,0 +1,212 @@
+================================================================================
+AI ENGINEERING PLATFORM - AUDIT PROJECT TREE
+Repository: cloud-ide-copilot
+Commit SHA: 40fdbc103b2f87831cee54d64e0235576adf18ba
+Branch: main
+================================================================================
+
+cloud-ide-copilot/
+├── .env.example
+├── .gitignore
+├── AUDIT_MANIFEST.md
+├── AUDIT_PROJECT_TREE.txt
+├── next.config.ts
+├── package-lock.json
+├── package.json
+├── postcss.config.mjs
+├── README.md
+├── tailwind.config.ts
+├── tsconfig.json
+├── vitest.config.ts
+│
+├── docs/
+│   ├── architecture.md
+│   ├── database.md
+│   ├── deployment.md
+│   ├── environment-variables.md
+│   ├── github-setup.md
+│   ├── local-development.md
+│   ├── provider-interfaces.md
+│   ├── roadmap.md
+│   ├── sandbox.md
+│   ├── security-model.md
+│   ├── testing.md
+│   └── vercel-setup.md
+│
+├── supabase/
+│   ├── seed.sql
+│   └── migrations/
+│       ├── 00001_initial_schema.sql
+│       ├── 00002_rls_policies.sql
+│       ├── 00003_audit_triggers.sql
+│       └── 00004_project_memory.sql
+│
+├── src/
+│   ├── app/
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   ├── page.tsx
+│   │   │
+│   │   ├── (dashboard)/
+│   │   │   └── [orgSlug]/
+│   │   │       ├── layout.tsx
+│   │   │       ├── page.tsx
+│   │   │       ├── audit/
+│   │   │       │   └── page.tsx
+│   │   │       ├── deployments/
+│   │   │       │   └── page.tsx
+│   │   │       ├── incidents/
+│   │   │       │   └── page.tsx
+│   │   │       ├── projects/
+│   │   │       │   ├── page.tsx
+│   │   │       │   ├── new/
+│   │   │       │   │   └── page.tsx
+│   │   │       │   └── [projectSlug]/
+│   │   │       │       ├── page.tsx
+│   │   │       │       └── incidents/
+│   │   │       │           └── [incidentId]/
+│   │   │       │               └── page.tsx
+│   │   │       ├── settings/
+│   │   │       │   └── page.tsx
+│   │   │       ├── team/
+│   │   │       │   └── page.tsx
+│   │   │       └── workspaces/
+│   │   │           ├── page.tsx
+│   │   │           └── [workspaceId]/
+│   │   │               └── page.tsx
+│   │   │
+│   │   └── api/
+│   │       ├── health/
+│   │       │   └── route.ts
+│   │       ├── projects/
+│   │       │   └── route.ts
+│   │       ├── webhooks/
+│   │       │   ├── github/
+│   │       │   │   └── route.ts
+│   │       │   └── sentry/
+│   │       │       └── route.ts
+│   │       └── workspaces/
+│   │           └── [workspaceId]/
+│   │               ├── analyze/
+│   │               │   └── route.ts
+│   │               ├── approve/
+│   │               │   └── route.ts
+│   │               ├── commands/
+│   │               │   └── route.ts
+│   │               ├── pr/
+│   │               │   └── route.ts
+│   │               ├── repair/
+│   │               │   └── route.ts
+│   │               ├── stop/
+│   │               │   └── route.ts
+│   │               └── validate/
+│   │                   └── route.ts
+│   │
+│   ├── components/
+│   │   ├── audit/
+│   │   │   └── audit-event-list.tsx
+│   │   ├── incident/
+│   │   │   ├── ai-diagnosis-card.tsx
+│   │   │   └── incident-card.tsx
+│   │   ├── layout/
+│   │   │   ├── mobile-nav.tsx
+│   │   │   ├── navbar.tsx
+│   │   │   ├── org-switcher.tsx
+│   │   │   └── sidebar.tsx
+│   │   ├── ui/
+│   │   │   ├── alert.tsx
+│   │   │   ├── badge.tsx
+│   │   │   ├── button.tsx
+│   │   │   ├── card.tsx
+│   │   │   ├── diff-viewer.tsx
+│   │   │   ├── input.tsx
+│   │   │   ├── modal.tsx
+│   │   │   ├── tabs.tsx
+│   │   │   └── terminal-output.tsx
+│   │   └── workspace/
+│   │       ├── pr-approval-view.tsx
+│   │       └── validation-pipeline-view.tsx
+│   │
+│   ├── lib/
+│   │   ├── errors.ts
+│   │   ├── utils.ts
+│   │   ├── audit/
+│   │   │   └── logger.ts
+│   │   ├── security/
+│   │   │   ├── allowlist.ts
+│   │   │   ├── branch-guard.ts
+│   │   │   ├── redaction.ts
+│   │   │   └── signature.ts
+│   │   └── supabase/
+│   │       ├── client.ts
+│   │       ├── server.ts
+│   │       └── types.ts
+│   │
+│   ├── server/
+│   │   ├── providers/
+│   │   │   ├── agent/
+│   │   │   │   ├── agent.interface.ts
+│   │   │   │   └── openhands.provider.ts
+│   │   │   ├── ai/
+│   │   │   │   ├── ai.interface.ts
+│   │   │   │   ├── openrouter.provider.ts
+│   │   │   │   └── prompts.ts
+│   │   │   ├── deployment/
+│   │   │   │   ├── deployment.interface.ts
+│   │   │   │   └── vercel.provider.ts
+│   │   │   ├── git/
+│   │   │   │   ├── git.interface.ts
+│   │   │   │   ├── github.provider.ts
+│   │   │   │   └── mock.provider.ts
+│   │   │   ├── incident/
+│   │   │   │   ├── incident.interface.ts
+│   │   │   │   └── sentry.provider.ts
+│   │   │   ├── memory/
+│   │   │   │   ├── database-memory.provider.ts
+│   │   │   │   ├── memory.interface.ts
+│   │   │   │   └── tencent-memory.provider.ts
+│   │   │   └── sandbox/
+│   │   │       ├── mock-sandbox.provider.ts
+│   │   │       ├── sandbox.interface.ts
+│   │   │       └── vercel-sandbox.provider.ts
+│   │   ├── rbac/
+│   │   │   ├── guard.ts
+│   │   │   ├── permissions.ts
+│   │   │   └── roles.ts
+│   │   ├── services/
+│   │   │   ├── ai-analysis.service.ts
+│   │   │   ├── git-pr.service.ts
+│   │   │   ├── incident.service.ts
+│   │   │   ├── project.service.ts
+│   │   │   ├── validation.service.ts
+│   │   │   └── workspace.service.ts
+│   │   └── state-machine/
+│   │       └── workspace-state.ts
+│   │
+│   └── trigger/
+│       ├── sentry-incident.task.ts
+│       ├── validation-pipeline.task.ts
+│       ├── workspace-cleanup.task.ts
+│       └── workspace-lifecycle.task.ts
+│
+└── tests/
+    ├── integration/
+    │   ├── pr-approval-flow.test.ts
+    │   ├── tenant-isolation.test.ts
+    │   └── validation-gate.test.ts
+    └── unit/
+        ├── memory/
+        │   └── memory.test.ts
+        ├── providers/
+        │   ├── openhands.test.ts
+        │   ├── openrouter.test.ts
+        │   └── sentry.test.ts
+        ├── rbac/
+        │   └── permissions.test.ts
+        ├── security/
+        │   ├── allowlist.test.ts
+        │   ├── branch-guard.test.ts
+        │   ├── redaction.test.ts
+        │   └── signature.test.ts
+        └── state-machine/
+            └── workspace-state.test.ts

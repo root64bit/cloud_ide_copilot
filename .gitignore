@@ -1,0 +1,34 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+*.log
+
+# Next.js
+/.next/
+/out/
+
+# Production
+/build
+/dist
+
+# Environment Files (Do not commit real secrets)
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Misc
+.DS_Store
+*.pem
+*.key
+*.zip
+Thumbs.db
