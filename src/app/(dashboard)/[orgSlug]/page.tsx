@@ -16,7 +16,6 @@ import {
   FolderGit2,
   GitBranch,
   Plus,
-  Server,
   ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
@@ -38,7 +37,7 @@ export default async function DashboardOverviewPage({
 
   const projects = await ProjectRepo.listByOrg(org.id);
   const allIncidents = await IncidentRepo.listByOrg(org.id);
-  const incidents = allIncidents.filter((i) => i.status !== "resolved");
+  const incidents = allIncidents.filter((i: any) => i.status !== "resolved");
   const workspaces = await WorkspaceRepo.listByOrg(org.id);
 
   return (
@@ -144,8 +143,8 @@ export default async function DashboardOverviewPage({
                 </CardContent>
               </Card>
             ) : (
-              incidents.slice(0, 5).map((incident) => {
-                const project = projects.find((p) => p.id === incident.project_id);
+              incidents.slice(0, 5).map((incident: any) => {
+                const project = projects.find((p: any) => p.id === incident.project_id);
                 return (
                   <IncidentCard
                     key={incident.id}
@@ -175,7 +174,7 @@ export default async function DashboardOverviewPage({
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 divide-y divide-border/40">
-              {projects.map((proj) => (
+              {projects.map((proj: any) => (
                 <div key={proj.id} className="py-2.5 first:pt-1 last:pb-1 flex items-center justify-between">
                   <div>
                     <Link

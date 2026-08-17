@@ -2,7 +2,7 @@ import { IncidentCard } from "@/components/incident/incident-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { IncidentRepo, OrganizationRepo, ProjectRepo } from "@/lib/supabase/repositories";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import React from "react";
 
 export const dynamic = "force-dynamic";
@@ -46,8 +46,8 @@ export default async function IncidentsPage({
             </CardContent>
           </Card>
         ) : (
-          incidents.map((inc) => {
-            const project = projects.find((p) => p.id === inc.project_id);
+          incidents.map((inc: any) => {
+            const project = projects.find((p: any) => p.id === inc.project_id);
             return (
               <IncidentCard
                 key={inc.id}

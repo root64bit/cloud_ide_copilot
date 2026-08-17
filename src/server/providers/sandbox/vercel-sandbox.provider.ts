@@ -111,11 +111,13 @@ export class VercelSandboxProvider implements SandboxProvider {
       if (sandbox) {
         const res = await sandbox.runCommand(command, args);
         const durationMs = Date.now() - startTime;
+        const stdoutStr = typeof res.stdout === "function" ? await res.stdout() : String(res.stdout || "");
+        const stderrStr = typeof res.stderr === "function" ? await res.stderr() : String(res.stderr || "");
 
         return {
-          exitCode: res.exitCode,
-          stdout: truncateOutput(redactSecrets(res.stdout || "")),
-          stderr: truncateOutput(redactSecrets(res.stderr || "")),
+          exitCode: res.exitCode ?? 0,
+          stdout: truncateOutput(redactSecrets(stdoutStr)),
+          stderr: truncateOutput(redactSecrets(stderrStr)),
           durationMs,
         };
       }
@@ -162,16 +164,19 @@ export class VercelSandboxProvider implements SandboxProvider {
         // Dry-run check
         const checkRes = await sandbox.runCommand("git", ["apply", "--check", patchFile]);
         if (checkRes.exitCode !== 0) {
+          const stderrStr = typeof checkRes.stderr === "function" ? await checkRes.stderr() : String(checkRes.stderr || "");
           await sandbox.runCommand("rm", ["-f", patchFile]);
-          return { success: false, output: `Patch validation failed: ${checkRes.stderr}` };
+          return { success: false, output: `Patch validation failed: ${stderrStr}` };
         }
         // Apply patch
         const applyRes = await sandbox.runCommand("git", ["apply", patchFile]);
+        const stdoutStr = typeof applyRes.stdout === "function" ? await applyRes.stdout() : String(applyRes.stdout || "");
+        const stderrStr = typeof applyRes.stderr === "function" ? await applyRes.stderr() : String(applyRes.stderr || "");
         // Clean up temporary patch artifact
         await sandbox.runCommand("rm", ["-f", patchFile]);
         return {
           success: applyRes.exitCode === 0,
-          output: applyRes.stdout || applyRes.stderr || "Patch applied successfully",
+          output: stdoutStr || stderrStr || "Patch applied successfully",
         };
       }
     }

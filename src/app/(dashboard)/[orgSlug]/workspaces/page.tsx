@@ -47,8 +47,8 @@ export default async function WorkspacesListPage({
             </CardContent>
           </Card>
         ) : (
-          workspaces.map((ws) => {
-            const project = projects.find((p) => p.id === ws.project_id);
+          workspaces.map((ws: any) => {
+            const project = projects.find((p: any) => p.id === ws.project_id);
             return (
               <Card key={ws.id} className="hover:border-primary/40 transition-colors">
                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
