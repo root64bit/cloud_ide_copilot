@@ -50,7 +50,7 @@ export class ValidationService {
         stepResults.push({
           step,
           passed,
-          exitCode: cmdRun.exit_code,
+          exitCode: cmdRun.exit_code ?? (passed ? 0 : 1),
           output: cmdRun.stdout_excerpt || cmdRun.stderr_excerpt || "",
         });
 

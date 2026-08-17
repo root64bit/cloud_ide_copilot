@@ -1,6 +1,7 @@
-import { logger, task } from "@trigger.dev/sdk";
+import { RepairArtifactRepo } from "@/lib/supabase/repositories";
 import { OpenHandsAgentProvider } from "@/server/providers/agent/openhands.provider";
 import type { IncidentDiagnosis } from "@/server/providers/ai/ai.interface";
+import { logger, task } from "@trigger.dev/sdk";
 
 export interface OpenHandsRepairTaskPayload {
   workspaceId: string;
@@ -9,6 +10,9 @@ export interface OpenHandsRepairTaskPayload {
   incidentTitle: string;
   diagnosis: IncidentDiagnosis;
   instructions?: string;
+  organizationId?: string;
+  projectId?: string;
+  incidentId?: string;
 }
 
 export const openHandsRepairTask = task({
@@ -39,6 +43,30 @@ export const openHandsRepairTask = task({
       diagnosis: payload.diagnosis,
       instructions: payload.instructions,
     });
+
+    // Persist repair artifact in database
+    if (result.diff || result.conversationId) {
+      try {
+        await RepairArtifactRepo.create({
+          organization_id: payload.organizationId || "00000000-0000-0000-0000-000000000001",
+          project_id: payload.projectId || "10000000-0000-0000-0000-000000000001",
+          workspace_id: payload.workspaceId,
+          incident_id: payload.incidentId || null,
+          provider: "openhands",
+          conversation_id: result.conversationId || null,
+          sandbox_id: result.sandboxId || null,
+          patch_content: result.diff || "",
+          files_changed: result.modifiedFiles || [],
+          stats: {
+            conversationUrl: result.conversationUrl,
+            patchApplied: result.patchApplied,
+          },
+          status: result.patchApplied ? "completed" : "pending",
+        });
+      } catch (err: any) {
+        logger.warn("Failed to persist repair artifact", { error: err?.message });
+      }
+    }
 
     logger.info("OpenHands Cloud repair finished", {
       workspaceId: payload.workspaceId,

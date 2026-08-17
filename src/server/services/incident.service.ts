@@ -1,6 +1,6 @@
 import { AuditLogger } from "@/lib/audit/logger";
 import { NotFoundError } from "@/lib/errors";
-import { InMemoryDatabase } from "@/lib/supabase/server";
+import { IncidentRepo } from "@/lib/supabase/repositories";
 import type { IncidentLevel, IncidentStatus } from "@/lib/supabase/types";
 import type { NormalizedIncident } from "../providers/incident/incident.interface";
 import { AuthGuard } from "../rbac/guard";
@@ -11,11 +11,21 @@ export class IncidentService {
     projectId: string,
     incident: NormalizedIncident
   ) {
-    const incidentId = `inc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const now = new Date().toISOString();
+    const existing = await IncidentRepo.findByExternalIssueId(projectId, incident.externalIssueId);
 
-    const record = {
-      id: incidentId,
+    if (existing) {
+      const updated = await IncidentRepo.update(organizationId, existing.id, {
+        last_seen_at: incident.lastSeenAt,
+        occurrence_count: (existing.occurrence_count || 1) + 1,
+        sanitized_metadata: {
+          stacktrace: incident.stacktrace,
+          ...incident.sanitizedMetadata,
+        },
+      });
+      return updated || existing;
+    }
+
+    const record = await IncidentRepo.create({
       organization_id: organizationId,
       project_id: projectId,
       provider: incident.provider,
@@ -35,11 +45,7 @@ export class IncidentService {
         stacktrace: incident.stacktrace,
         ...incident.sanitizedMetadata,
       },
-      created_at: now,
-      updated_at: now,
-    };
-
-    InMemoryDatabase.getInstance().incidents.set(incidentId, record);
+    });
 
     await AuditLogger.log({
       organizationId,
@@ -61,9 +67,9 @@ export class IncidentService {
     incidentId: string
   ) {
     await AuthGuard.assertPermission(userId, organizationId, "incident:view");
-    const incident = InMemoryDatabase.getInstance().incidents.get(incidentId);
+    const incident = await IncidentRepo.findById(organizationId, incidentId);
 
-    if (!incident || incident.organization_id !== organizationId) {
+    if (!incident) {
       throw new NotFoundError("Incident", incidentId);
     }
 
@@ -76,13 +82,10 @@ export class IncidentService {
     projectId?: string
   ) {
     await AuthGuard.assertPermission(userId, organizationId, "incident:view");
-    const all = Array.from(InMemoryDatabase.getInstance().incidents.values());
-
-    return all.filter((inc) => {
-      if (inc.organization_id !== organizationId) return false;
-      if (projectId && inc.project_id !== projectId) return false;
-      return true;
-    });
+    if (projectId) {
+      return IncidentRepo.listByProject(projectId);
+    }
+    return IncidentRepo.listByOrg(organizationId);
   }
 
   public static async updateStatus(
@@ -92,19 +95,22 @@ export class IncidentService {
     newStatus: IncidentStatus
   ) {
     await AuthGuard.assertPermission(userId, organizationId, "incident:resolve");
-    const incident = await this.getIncident(userId, organizationId, incidentId);
+    const updated = await IncidentRepo.update(organizationId, incidentId, {
+      status: newStatus,
+    });
 
-    incident.status = newStatus;
-    incident.updated_at = new Date().toISOString();
+    if (!updated) {
+      throw new NotFoundError("Incident", incidentId);
+    }
 
     await AuditLogger.log({
       organizationId,
-      projectId: incident.project_id,
+      projectId: updated.project_id,
       userId,
       eventType: "incident.status_changed",
-      metadata: { incidentId, status: newStatus },
+      metadata: { to: newStatus },
     });
 
-    return incident;
+    return updated;
   }
 }

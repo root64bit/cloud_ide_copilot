@@ -1,6 +1,6 @@
 import { AuditLogger } from "@/lib/audit/logger";
 import { NotFoundError } from "@/lib/errors";
-import { InMemoryDatabase } from "@/lib/supabase/server";
+import { ProjectRepo } from "@/lib/supabase/repositories";
 import type { ProjectStatus } from "@/lib/supabase/types";
 import { AuthGuard } from "../rbac/guard";
 
@@ -28,14 +28,9 @@ export interface CreateProjectInput {
 
 export class ProjectService {
   public static async createProject(userId: string, input: CreateProjectInput) {
-    // Assert user has project:create permission
     await AuthGuard.assertPermission(userId, input.organizationId, "project:create");
 
-    const projectId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const now = new Date().toISOString();
-
-    const project = {
-      id: projectId,
+    const project = await ProjectRepo.create({
       organization_id: input.organizationId,
       name: input.name,
       slug: input.slug,
@@ -58,15 +53,11 @@ export class ProjectService {
       dev_command: input.devCommand || "npm run dev",
       dev_port: input.devPort || 3000,
       status: "active" as ProjectStatus,
-      created_at: now,
-      updated_at: now,
-    };
-
-    InMemoryDatabase.getInstance().projects.set(projectId, project);
+    });
 
     await AuditLogger.log({
       organizationId: input.organizationId,
-      projectId,
+      projectId: project.id,
       userId,
       eventType: "project.created",
       metadata: { projectName: input.name, repo: `${input.repositoryOwner}/${input.repositoryName}` },
@@ -78,12 +69,10 @@ export class ProjectService {
   public static async getProject(userId: string, organizationId: string, projectIdOrSlug: string) {
     await AuthGuard.assertPermission(userId, organizationId, "project:view");
 
-    const all = Array.from(InMemoryDatabase.getInstance().projects.values());
-    const project = all.find(
-      (p) =>
-        p.organization_id === organizationId &&
-        (p.id === projectIdOrSlug || p.slug === projectIdOrSlug)
-    );
+    let project = await ProjectRepo.findById(organizationId, projectIdOrSlug);
+    if (!project) {
+      project = await ProjectRepo.findBySlug(organizationId, projectIdOrSlug);
+    }
 
     if (!project) {
       throw new NotFoundError("Project", projectIdOrSlug);
@@ -94,8 +83,6 @@ export class ProjectService {
 
   public static async listProjects(userId: string, organizationId: string) {
     await AuthGuard.assertPermission(userId, organizationId, "project:view");
-
-    const all = Array.from(InMemoryDatabase.getInstance().projects.values());
-    return all.filter((p) => p.organization_id === organizationId);
+    return ProjectRepo.listByOrg(organizationId);
   }
 }

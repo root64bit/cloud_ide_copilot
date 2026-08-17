@@ -1,38 +1,79 @@
 import { truncateOutput } from "@/lib/security/allowlist";
 import { redactSecrets } from "@/lib/security/redaction";
+import { Sandbox } from "@vercel/sandbox";
 import type {
   SandboxExecutionResult,
   SandboxInstance,
   SandboxProvider,
 } from "./sandbox.interface";
 
+export interface VercelSandboxCreateOptions {
+  name: string;
+  repoOwner: string;
+  repoName: string;
+  commitSha: string;
+  branch?: string;
+  installationToken?: string;
+  ttlMinutes?: number;
+}
+
 export class VercelSandboxProvider implements SandboxProvider {
   private apiToken: string;
   private ideDomain: string;
+  private activeSandboxes = new Map<string, Sandbox>();
 
   constructor() {
-    this.apiToken = process.env.VERCEL_SANDBOX_TOKEN || "mock-sandbox-token";
+    this.apiToken = process.env.VERCEL_SANDBOX_TOKEN || "";
     this.ideDomain = process.env.CODE_SERVER_BASE_DOMAIN || "ide.engineering.example.com";
   }
 
-  async createSandbox(options: {
-    name: string;
-    repoOwner: string;
-    repoName: string;
-    commitSha: string;
-    ttlMinutes?: number;
-  }): Promise<SandboxInstance> {
+  private isLive(): boolean {
+    return Boolean(this.apiToken) && process.env.NODE_ENV !== "test" && process.env.ALLOW_MOCK_PROVIDERS !== "true";
+  }
+
+  async createSandbox(options: VercelSandboxCreateOptions): Promise<SandboxInstance> {
     const sandboxId = `sbx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const ttl = options.ttlMinutes || 60;
     const expiresAt = new Date(Date.now() + ttl * 60 * 1000).toISOString();
 
-    // If real Vercel Sandbox API is configured, call @vercel/sandbox endpoint
-    if (process.env.VERCEL_SANDBOX_TOKEN) {
-      // In production with @vercel/sandbox:
-      // const sandbox = await Sandbox.create({ template: 'node-20', timeout: ttl * 60 * 1000 });
-      // await sandbox.exec(`git clone ... && git checkout ${options.commitSha}`);
+    if (this.isLive()) {
+      try {
+        const sandbox = await Sandbox.create({
+          runtime: "node22",
+          timeout: ttl * 60 * 1000,
+          token: this.apiToken,
+        });
+
+        this.activeSandboxes.set(sandbox.name, sandbox);
+
+        // Clone repository with short-lived token if available
+        const tokenPart = options.installationToken ? `x-access-token:${options.installationToken}@` : "";
+        const cloneUrl = `https://${tokenPart}github.com/${options.repoOwner}/${options.repoName}.git`;
+        const branch = options.branch || "main";
+
+        await sandbox.runCommand("git", ["clone", "--depth", "50", "--branch", branch, cloneUrl, "/workspace"]);
+
+        // Immediately scrub credentials from git remote
+        const cleanUrl = `https://github.com/${options.repoOwner}/${options.repoName}.git`;
+        await sandbox.runCommand("git", ["remote", "set-url", "origin", cleanUrl]);
+
+        if (options.commitSha) {
+          await sandbox.runCommand("git", ["checkout", options.commitSha]);
+        }
+
+        return {
+          id: sandbox.name,
+          name: options.name,
+          status: "ready",
+          createdAt: new Date().toISOString(),
+          expiresAt,
+        };
+      } catch (err: any) {
+        throw new Error(`Failed to initialize Vercel Sandbox: ${err?.message || err}`);
+      }
     }
 
+    // Deterministic mock instance for tests & offline dev
     return {
       id: sandboxId,
       name: options.name,
@@ -40,6 +81,20 @@ export class VercelSandboxProvider implements SandboxProvider {
       createdAt: new Date().toISOString(),
       expiresAt,
     };
+  }
+
+  private async getSandbox(sandboxId: string): Promise<Sandbox | null> {
+    if (!this.isLive()) return null;
+    let sbx = this.activeSandboxes.get(sandboxId);
+    if (!sbx && this.apiToken) {
+      try {
+        sbx = await Sandbox.get({ name: sandboxId, token: this.apiToken });
+        if (sbx) this.activeSandboxes.set(sandboxId, sbx);
+      } catch {
+        return null;
+      }
+    }
+    return sbx || null;
   }
 
   async executeCommand(
@@ -51,16 +106,28 @@ export class VercelSandboxProvider implements SandboxProvider {
     const startTime = Date.now();
     const fullCmd = `${command} ${args.join(" ")}`.trim();
 
-    // In actual production @vercel/sandbox:
-    // const result = await sandbox.exec(command, args, { cwd });
+    if (this.isLive()) {
+      const sandbox = await this.getSandbox(sandboxId);
+      if (sandbox) {
+        const res = await sandbox.runCommand(command, args);
+        const durationMs = Date.now() - startTime;
 
-    // Mock execution response for local dev / testing
+        return {
+          exitCode: res.exitCode,
+          stdout: truncateOutput(redactSecrets(res.stdout || "")),
+          stderr: truncateOutput(redactSecrets(res.stderr || "")),
+          durationMs,
+        };
+      }
+    }
+
+    // Mock execution response for tests and local development
     let exitCode = 0;
     let stdout = `Executing: ${fullCmd}\n`;
     let stderr = "";
 
     if (fullCmd.includes("test")) {
-      stdout += "PASS tests/pricing.test.ts (1 passed, 1 total)\nTests completed successfully.";
+      stdout += "PASS tests/unit/pricing.test.ts (1 passed, 1 total)\nTests completed successfully.";
     } else if (fullCmd.includes("lint")) {
       stdout += "✔ No ESLint warnings or errors found.";
     } else if (fullCmd.includes("typecheck") || fullCmd.includes("tsc")) {
@@ -85,16 +152,60 @@ export class VercelSandboxProvider implements SandboxProvider {
     };
   }
 
-  async readFile(_sandboxId: string, filePath: string): Promise<string> {
+  async applyPatch(sandboxId: string, patchContent: string, _cwd = "/workspace"): Promise<{ success: boolean; output: string }> {
+    const patchFile = `/tmp/repair_${Date.now()}.patch`;
+
+    if (this.isLive()) {
+      const sandbox = await this.getSandbox(sandboxId);
+      if (sandbox) {
+        await sandbox.fs.writeFile(patchFile, patchContent);
+        // Dry-run check
+        const checkRes = await sandbox.runCommand("git", ["apply", "--check", patchFile]);
+        if (checkRes.exitCode !== 0) {
+          await sandbox.runCommand("rm", ["-f", patchFile]);
+          return { success: false, output: `Patch validation failed: ${checkRes.stderr}` };
+        }
+        // Apply patch
+        const applyRes = await sandbox.runCommand("git", ["apply", patchFile]);
+        // Clean up temporary patch artifact
+        await sandbox.runCommand("rm", ["-f", patchFile]);
+        return {
+          success: applyRes.exitCode === 0,
+          output: applyRes.stdout || applyRes.stderr || "Patch applied successfully",
+        };
+      }
+    }
+
+    return { success: true, output: "Patch applied cleanly in mock sandbox." };
+  }
+
+  async readFile(sandboxId: string, filePath: string): Promise<string> {
+    if (this.isLive()) {
+      const sandbox = await this.getSandbox(sandboxId);
+      if (sandbox) {
+        return (await sandbox.fs.readFile(filePath, "utf8")) as string;
+      }
+    }
     return `// Content of ${filePath}\nexport function calculateTotal() {\n  return 100;\n}`;
   }
 
-  async writeFile(_sandboxId: string, _filePath: string, _content: string): Promise<void> {
-    // Write code to sandbox workspace
+  async writeFile(sandboxId: string, filePath: string, content: string): Promise<void> {
+    if (this.isLive()) {
+      const sandbox = await this.getSandbox(sandboxId);
+      if (sandbox) {
+        await sandbox.fs.writeFile(filePath, content);
+      }
+    }
   }
 
-  async stopSandbox(_sandboxId: string): Promise<void> {
-    // Terminate sandbox instance
+  async stopSandbox(sandboxId: string): Promise<void> {
+    if (this.isLive()) {
+      const sandbox = await this.getSandbox(sandboxId);
+      if (sandbox) {
+        await sandbox.stop();
+        this.activeSandboxes.delete(sandboxId);
+      }
+    }
   }
 
   async getBrowserIdeUrl(sandboxId: string): Promise<string> {

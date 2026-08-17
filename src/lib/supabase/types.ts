@@ -562,6 +562,53 @@ export interface Database {
           updated_at?: string;
         };
       };
+      repair_artifacts: {
+        Row: {
+          id: string;
+          organization_id: string;
+          project_id: string;
+          workspace_id: string;
+          incident_id: string | null;
+          provider: string;
+          conversation_id: string | null;
+          sandbox_id: string | null;
+          patch_content: string;
+          files_changed: string[];
+          stats: Json;
+          status: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          project_id: string;
+          workspace_id: string;
+          incident_id?: string | null;
+          provider?: string;
+          conversation_id?: string | null;
+          sandbox_id?: string | null;
+          patch_content: string;
+          files_changed?: string[];
+          stats?: Json;
+          status?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          workspace_id?: string;
+          incident_id?: string | null;
+          provider?: string;
+          conversation_id?: string | null;
+          sandbox_id?: string | null;
+          patch_content?: string;
+          files_changed?: string[];
+          stats?: Json;
+          status?: string;
+          created_at?: string;
+        };
+      };
     };
   };
 }

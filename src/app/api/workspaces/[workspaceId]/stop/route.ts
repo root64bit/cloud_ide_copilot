@@ -1,6 +1,10 @@
+import { getAuthenticatedUser } from "@/lib/supabase/auth";
 import { VercelSandboxProvider } from "@/server/providers/sandbox/vercel-sandbox.provider";
 import { WorkspaceService } from "@/server/services/workspace.service";
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(
   req: Request,
@@ -8,22 +12,22 @@ export async function POST(
 ) {
   try {
     const { workspaceId } = await params;
-    const body = await req.json();
-    const userId = "user_engineer";
+    const user = await getAuthenticatedUser(req);
+    const body = await req.json().catch(() => ({}));
     const organizationId = body.organizationId || "00000000-0000-0000-0000-000000000001";
 
     const sandboxProvider = new VercelSandboxProvider();
     const workspace = await WorkspaceService.stopWorkspace(
-      userId,
+      user.id,
       organizationId,
       workspaceId,
       sandboxProvider
     );
 
-    return NextResponse.json({ workspace });
+    return NextResponse.json({ ok: true, workspace });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error?.message || "Failed to stop workspace" },
+      { ok: false, error: error?.message || "Failed to stop workspace" },
       { status: error?.statusCode || 500 }
     );
   }

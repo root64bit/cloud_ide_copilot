@@ -2,9 +2,13 @@ import { IncidentCard } from "@/components/incident/incident-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { InMemoryDatabase } from "@/lib/supabase/server";
 import {
-  Activity,
+  IncidentRepo,
+  OrganizationRepo,
+  ProjectRepo,
+  WorkspaceRepo,
+} from "@/lib/supabase/repositories";
+import {
   AlertTriangle,
   ArrowUpRight,
   Box,
@@ -18,18 +22,24 @@ import {
 import Link from "next/link";
 import React from "react";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardOverviewPage({
   params,
 }: {
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  const db = InMemoryDatabase.getInstance();
+  const org = (await OrganizationRepo.findBySlug(orgSlug)) || {
+    id: "00000000-0000-0000-0000-000000000001",
+    name: "Acme Engineering",
+    slug: orgSlug,
+  };
 
-  const projects = Array.from(db.projects.values());
-  const incidents = Array.from(db.incidents.values()).filter((i) => i.status !== "resolved");
-  const workspaces = Array.from(db.workspaces.values());
-  const deployments = Array.from(db.deployments.values());
+  const projects = await ProjectRepo.listByOrg(org.id);
+  const allIncidents = await IncidentRepo.listByOrg(org.id);
+  const incidents = allIncidents.filter((i) => i.status !== "resolved");
+  const workspaces = await WorkspaceRepo.listByOrg(org.id);
 
   return (
     <div className="space-y-6">
@@ -99,91 +109,107 @@ export default async function DashboardOverviewPage({
                 <span className="text-sm font-bold text-emerald-400">Protected</span>
               </div>
             </div>
-            <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
+            <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Projects Grid */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">Active Projects</h3>
-          <Link
-            href={`/${orgSlug}/projects`}
-            className="text-xs text-primary hover:underline flex items-center gap-1"
-          >
-            View all projects <ArrowUpRight className="w-3 h-3" />
-          </Link>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column (2 cols): Active Incidents Requiring Attention */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+              Active Incidents Requiring Investigation
+            </h3>
+            <Link
+              href={`/${orgSlug}/incidents`}
+              className="text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              View all ({incidents.length})
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {incidents.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+                  <h4 className="text-sm font-medium text-foreground">Zero Active Incidents</h4>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    No production errors reported by Sentry.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              incidents.slice(0, 5).map((incident) => {
+                const project = projects.find((p) => p.id === incident.project_id);
+                return (
+                  <IncidentCard
+                    key={incident.id}
+                    incident={incident as any}
+                    projectSlug={project?.slug || "project"}
+                    orgSlug={orgSlug}
+                  />
+                );
+              })
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {projects.map((proj) => (
-            <Card key={proj.id} className="hover:border-primary/40 transition-colors">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-sm font-bold text-foreground">
+        {/* Right Column (1 col): Connected Projects & Pipeline Status */}
+        <div className="space-y-6">
+          {/* Projects Quick List */}
+          <Card>
+            <CardHeader className="p-4 pb-2 border-b border-border/60">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                <span>Projects</span>
+                <Link
+                  href={`/${orgSlug}/projects`}
+                  className="text-primary hover:underline lowercase font-normal"
+                >
+                  view all
+                </Link>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 divide-y divide-border/40">
+              {projects.map((proj) => (
+                <div key={proj.id} className="py-2.5 first:pt-1 last:pb-1 flex items-center justify-between">
+                  <div>
+                    <Link
+                      href={`/${orgSlug}/projects/${proj.slug}`}
+                      className="text-xs font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1.5"
+                    >
                       {proj.name}
-                    </CardTitle>
-                    <Badge variant="outline" className="font-mono text-[10px]">
+                      <ArrowUpRight className="w-3 h-3 text-muted-foreground" />
+                    </Link>
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5 font-mono">
+                      <GitBranch className="w-3 h-3" />
                       {proj.repository_owner}/{proj.repository_name}
-                    </Badge>
+                    </p>
                   </div>
-                  <Badge variant="success" className="text-[10px]">
-                    ● Ready
+                  <Badge variant="outline" className="text-[10px] uppercase font-mono">
+                    {proj.status}
                   </Badge>
                 </div>
-              </CardHeader>
-              <CardContent className="p-4 pt-0 space-y-3 text-xs">
-                <p className="text-muted-foreground line-clamp-2">{proj.description}</p>
-                <div className="flex items-center justify-between pt-2 border-t border-border/50 text-[11px] text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Server className="w-3 h-3" /> {proj.deployment_provider}
-                  </span>
-                  <span className="flex items-center gap-1 font-mono">
-                    <GitBranch className="w-3 h-3" /> {proj.default_branch}
-                  </span>
-                  <Link
-                    href={`/${orgSlug}/projects/${proj.slug}`}
-                    className="text-primary hover:underline font-semibold"
-                  >
-                    Open Console →
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
+              ))}
+            </CardContent>
+          </Card>
 
-      {/* Sentry Production Incidents */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Production Incidents</h3>
-            <Badge variant="danger" className="text-[10px]">
-              {incidents.length} Unresolved
-            </Badge>
-          </div>
-          <Link
-            href={`/${orgSlug}/incidents`}
-            className="text-xs text-primary hover:underline flex items-center gap-1"
-          >
-            All Incidents <ArrowUpRight className="w-3 h-3" />
-          </Link>
-        </div>
-
-        <div className="space-y-3">
-          {incidents.map((inc) => (
-            <IncidentCard
-              key={inc.id}
-              orgSlug={orgSlug}
-              projectSlug="onedealer"
-              incident={inc}
-            />
-          ))}
+          {/* Safety Gate Guarantee Card */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center gap-2 text-primary text-xs font-semibold">
+                <ShieldCheck className="w-4 h-4" />
+                Human-in-the-Loop Release Gate
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                AI coding agents operate in isolated sandboxes. Pull requests and production merges strictly require human confirmation from an authorized engineer or admin.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

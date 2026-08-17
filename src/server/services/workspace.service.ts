@@ -2,7 +2,7 @@ import { AuditLogger } from "@/lib/audit/logger";
 import { NotFoundError } from "@/lib/errors";
 import { validateAndResolveCommand } from "@/lib/security/allowlist";
 import { generateRepairBranchName } from "@/lib/security/branch-guard";
-import { InMemoryDatabase } from "@/lib/supabase/server";
+import { CommandRunRepo, WorkspaceRepo } from "@/lib/supabase/repositories";
 import type { CommandType, WorkspaceStatus } from "@/lib/supabase/types";
 import type { SandboxProvider } from "../providers/sandbox/sandbox.interface";
 import { AuthGuard } from "../rbac/guard";
@@ -26,23 +26,20 @@ export class WorkspaceService {
     await AuthGuard.assertPermission(userId, input.organizationId, "workspace:create");
     const project = await ProjectService.getProject(userId, input.organizationId, input.projectId);
 
-    const workspaceId = `ws_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const baseCommitSha = input.baseCommitSha || "a9f82d1c5e4b7890123456789abcdef012345678";
     const repairBranch = generateRepairBranchName(project.slug, input.incidentId ? "fix" : "dev");
-    const now = new Date().toISOString();
     const expiresAt = new Date(Date.now() + (input.ttlMinutes || 60) * 60000).toISOString();
 
     // 1. Create sandbox instance
     const sandboxInstance = await sandboxProvider.createSandbox({
-      name: `ws-${project.slug}-${workspaceId.slice(-4)}`,
+      name: `ws-${project.slug}-${Date.now().toString().slice(-4)}`,
       repoOwner: project.repository_owner,
       repoName: project.repository_name,
       commitSha: baseCommitSha,
       ttlMinutes: input.ttlMinutes,
     });
 
-    const workspace = {
-      id: workspaceId,
+    const workspace = await WorkspaceRepo.create({
       organization_id: input.organizationId,
       project_id: project.id,
       incident_id: input.incidentId || null,
@@ -53,18 +50,14 @@ export class WorkspaceService {
       repair_branch: repairBranch,
       status: "ready" as WorkspaceStatus,
       created_by: userId,
-      created_at: now,
-      last_activity_at: now,
       expires_at: expiresAt,
       stopped_at: null,
-    };
-
-    InMemoryDatabase.getInstance().workspaces.set(workspaceId, workspace);
+    });
 
     await AuditLogger.log({
       organizationId: input.organizationId,
       projectId: project.id,
-      workspaceId,
+      workspaceId: workspace.id,
       userId,
       eventType: "workspace.created",
       metadata: { sandboxId: sandboxInstance.id, repairBranch, baseCommitSha },
@@ -75,9 +68,9 @@ export class WorkspaceService {
 
   public static async getWorkspace(userId: string, organizationId: string, workspaceId: string) {
     await AuthGuard.assertPermission(userId, organizationId, "workspace:view");
-    const workspace = InMemoryDatabase.getInstance().workspaces.get(workspaceId);
+    const workspace = await WorkspaceRepo.findById(organizationId, workspaceId);
 
-    if (!workspace || workspace.organization_id !== organizationId) {
+    if (!workspace) {
       throw new NotFoundError("Workspace", workspaceId);
     }
 
@@ -106,9 +99,6 @@ export class WorkspaceService {
       devCommand: project.dev_command,
     });
 
-    const runId = `cmd_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const startedAt = new Date().toISOString();
-
     // 2. Execute inside sandbox
     const result = await sandboxProvider.executeCommand(
       workspace.sandbox_id || workspace.id,
@@ -116,11 +106,9 @@ export class WorkspaceService {
       resolved.args
     );
 
-    const completedAt = new Date().toISOString();
     const isSuccess = result.exitCode === 0;
 
-    const commandRun = {
-      id: runId,
+    const commandRun = await CommandRunRepo.create({
       workspace_id: workspaceId,
       command_type: commandType,
       command_display: resolved.resolvedCommand,
@@ -128,15 +116,9 @@ export class WorkspaceService {
       exit_code: result.exitCode,
       stdout_excerpt: result.stdout,
       stderr_excerpt: result.stderr,
-      started_at: startedAt,
-      completed_at: completedAt,
+      completed_at: new Date().toISOString(),
       triggered_by: userId,
-    };
-
-    InMemoryDatabase.getInstance().commandRuns.set(runId, commandRun);
-
-    // Update workspace last activity
-    workspace.last_activity_at = completedAt;
+    });
 
     await AuditLogger.log({
       organizationId,
@@ -163,8 +145,7 @@ export class WorkspaceService {
   ) {
     const workspace = await this.getWorkspace(userId, organizationId, workspaceId);
     const updatedStatus = WorkspaceStateMachine.transition(workspace.status, nextStatus, context);
-    workspace.status = updatedStatus;
-    workspace.last_activity_at = new Date().toISOString();
+    const updated = await WorkspaceRepo.updateStatus(organizationId, workspaceId, updatedStatus);
 
     await AuditLogger.log({
       organizationId,
@@ -175,7 +156,7 @@ export class WorkspaceService {
       metadata: { from: workspace.status, to: updatedStatus },
     });
 
-    return workspace;
+    return updated || workspace;
   }
 
   public static async stopWorkspace(
@@ -191,8 +172,7 @@ export class WorkspaceService {
       await sandboxProvider.stopSandbox(workspace.sandbox_id);
     }
 
-    workspace.status = "stopped";
-    workspace.stopped_at = new Date().toISOString();
+    const updated = await WorkspaceRepo.updateStatus(organizationId, workspaceId, "stopped");
 
     await AuditLogger.log({
       organizationId,
@@ -203,6 +183,6 @@ export class WorkspaceService {
       metadata: {},
     });
 
-    return workspace;
+    return updated || workspace;
   }
 }

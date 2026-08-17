@@ -1,7 +1,7 @@
 import { AuditLogger } from "@/lib/audit/logger";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
 import { assertSafeRepairBranch } from "@/lib/security/branch-guard";
-import { InMemoryDatabase } from "@/lib/supabase/server";
+import { DeploymentRepo, PullRequestRepo } from "@/lib/supabase/repositories";
 import type { DeploymentProvider } from "../providers/deployment/deployment.interface";
 import type { GitProvider } from "../providers/git/git.interface";
 import { AuthGuard } from "../rbac/guard";
@@ -18,13 +18,13 @@ export class GitPrService {
     workspaceId: string,
     gitProvider: GitProvider,
     deploymentProvider: DeploymentProvider,
-    options: { title: string; description: string }
+    options: { title?: string; description?: string } = {}
   ) {
     await AuthGuard.assertPermission(userId, organizationId, "workspace:create_pr");
     const workspace = await WorkspaceService.getWorkspace(userId, organizationId, workspaceId);
     const project = await ProjectService.getProject(userId, organizationId, workspace.project_id);
 
-    // Assert workspace has completed validation or is ready
+    // Assert workspace has completed validation
     if (workspace.status !== "ready_for_review") {
       throw new ValidationError(
         `Cannot create Pull Request while workspace is in status '${workspace.status}'. Automated validation checks must pass first.`
@@ -46,15 +46,13 @@ export class GitPrService {
     const prResult = await gitProvider.createPullRequest({
       owner: project.repository_owner,
       repo: project.repository_name,
-      title: options.title || `[AI-Fix] ${project.name} Repair`,
-      body: `## Automated AI Engineering Repair\n\n${options.description}\n\n- **Target Branch**: \`${workspace.repair_branch}\`\n- **Base Branch**: \`${project.default_branch}\`\n- **Base Commit**: \`${workspace.base_commit_sha}\`\n\n> ⚠️ *Production safety rule: This PR requires explicit human authorization to merge to production.*`,
+      title: options.title || `[AI-Fix] ${project.name} Repair (${workspace.repair_branch})`,
+      body: `## Automated AI Engineering Repair\n\n${options.description || "Automated repair proposal validated through test/lint/typecheck/build pipeline."}\n\n- **Target Branch**: \`${workspace.repair_branch}\`\n- **Base Branch**: \`${project.default_branch}\`\n- **Base Commit**: \`${workspace.base_commit_sha}\`\n\n> ⚠️ *Production safety rule: This PR requires explicit human authorization from an authorized engineer or admin before merging to production.*`,
       headBranch: workspace.repair_branch,
       baseBranch: project.default_branch,
     });
 
-    const prRecordId = `pr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const prRecord = {
-      id: prRecordId,
+    const prRecord = await PullRequestRepo.create({
       workspace_id: workspaceId,
       provider: "github",
       repository_id: project.repository_id,
@@ -63,13 +61,8 @@ export class GitPrService {
       url: prResult.htmlUrl,
       branch: workspace.repair_branch,
       base_branch: project.default_branch,
-      status: "open" as const,
-      created_at: new Date().toISOString(),
-      merged_at: null,
-      merged_by: null,
-    };
-
-    InMemoryDatabase.getInstance().pullRequests.set(prRecordId, prRecord);
+      status: "open",
+    });
 
     // Update workspace status
     await WorkspaceService.updateStatus(userId, organizationId, workspaceId, "pr_created");
@@ -81,19 +74,16 @@ export class GitPrService {
         workspace.repair_branch
       )) || `https://${project.slug}-preview-pr-${prResult.number}.vercel.app`;
 
-    const deploymentId = `dpl_prev_${Date.now()}`;
-    InMemoryDatabase.getInstance().deployments.set(deploymentId, {
-      id: deploymentId,
+    await DeploymentRepo.create({
       project_id: project.id,
       workspace_id: workspaceId,
       provider: "vercel",
-      external_deployment_id: deploymentId,
+      external_deployment_id: `dpl_prev_${Date.now()}`,
       environment: "preview",
       branch: workspace.repair_branch,
-      commitSha: workspace.base_commit_sha,
+      commit_sha: workspace.base_commit_sha,
       url: previewUrl,
       status: "ready",
-      created_at: new Date().toISOString(),
       ready_at: new Date().toISOString(),
     });
 
@@ -123,81 +113,81 @@ export class GitPrService {
     organizationId: string,
     workspaceId: string,
     gitProvider: GitProvider,
-    approvalNotes?: string
+    options: { approved?: boolean; reason?: string } | string = {}
   ) {
-    // Assert user is owner or authorized admin
-    const authSession = await AuthGuard.assertProductionApproval(userId, organizationId);
+    await AuthGuard.assertPermission(userId, organizationId, "deployment:approve_production");
     const workspace = await WorkspaceService.getWorkspace(userId, organizationId, workspaceId);
     const project = await ProjectService.getProject(userId, organizationId, workspace.project_id);
 
+    const opts = typeof options === "string" ? { approved: true, reason: options } : options;
+    const isApproved = opts.approved !== false;
+    const reason = opts.reason;
+
+    if (!isApproved) {
+      // Rejection branch
+      await WorkspaceService.updateStatus(userId, organizationId, workspaceId, "rejected");
+      await AuditLogger.log({
+        organizationId,
+        projectId: project.id,
+        workspaceId,
+        userId,
+        eventType: "production_gate.rejected",
+        metadata: { reason },
+      });
+      return { status: "rejected", reason };
+    }
+
+    // Must be in preview_ready or approved state
     if (workspace.status !== "preview_ready" && workspace.status !== "approved") {
       throw new ValidationError(
-        `Cannot approve repair for production while workspace is in status '${workspace.status}'. Preview must be ready.`
+        `Cannot merge to production while workspace is in status '${workspace.status}'. Preview must be verified first.`
       );
     }
 
-    // 1. Transition to approved
+    // 1. Advance to approved state
     await WorkspaceService.updateStatus(userId, organizationId, workspaceId, "approved", {
       humanApproved: true,
     });
 
-    // 2. Find associated PR
-    const prs = Array.from(InMemoryDatabase.getInstance().pullRequests.values());
-    const pr = prs.find((p) => p.workspace_id === workspaceId && p.status === "open");
-
-    let mergeSha = "f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0";
-    if (pr) {
-      const mergeResult = await gitProvider.mergePullRequest(
-        project.repository_owner,
-        project.repository_name,
-        pr.number
-      );
-      mergeSha = mergeResult.sha;
-      pr.status = "merged";
-      pr.merged_at = new Date().toISOString();
-      pr.merged_by = userId;
+    // 2. Fetch associated PR
+    const prRecord = await PullRequestRepo.findByWorkspaceId(workspaceId);
+    if (!prRecord) {
+      throw new ValidationError(`No Pull Request record found for workspace '${workspaceId}'`);
     }
 
-    // 3. Transition to merged and completed
-    await WorkspaceService.updateStatus(userId, organizationId, workspaceId, "merged", {
-      humanApproved: true,
-    });
-    await WorkspaceService.updateStatus(userId, organizationId, workspaceId, "completed");
+    // 3. Execute merge via GitProvider
+    await gitProvider.mergePullRequest(
+      project.repository_owner,
+      project.repository_name,
+      prRecord.number
+    );
 
-    // 4. Record production deployment entry
-    const prodDeployId = `dpl_prod_${Date.now()}`;
-    InMemoryDatabase.getInstance().deployments.set(prodDeployId, {
-      id: prodDeployId,
-      project_id: project.id,
-      workspace_id: workspaceId,
-      provider: "vercel",
-      external_deployment_id: prodDeployId,
-      environment: "production",
-      branch: project.default_branch,
-      commitSha: mergeSha,
-      url: `https://${project.production_domain || `${project.slug}.example.com`}`,
-      status: "ready",
-      created_at: new Date().toISOString(),
-      ready_at: new Date().toISOString(),
-    });
+    // 4. Update PR record status
+    await PullRequestRepo.updateStatus(prRecord.id, "merged", userId);
+
+    // 5. Advance workspace to merged state (remains merged until production deployment is verified)
+    await WorkspaceService.updateStatus(userId, organizationId, workspaceId, "merged");
 
     await AuditLogger.log({
       organizationId,
       projectId: project.id,
       workspaceId,
       userId,
-      eventType: "deployment.production_approved_and_merged",
+      eventType: "production_gate.merged",
       metadata: {
-        approverRole: authSession.role,
-        notes: approvalNotes || "Approved for production merge",
-        mergeSha,
+        prNumber: prRecord.number,
+        authorizer: userId,
+        repairBranch: workspace.repair_branch,
       },
     });
 
     return {
       status: "merged",
-      mergeSha,
-      productionUrl: `https://${project.production_domain || `${project.slug}.example.com`}`,
+      prNumber: prRecord.number,
+      mergedBy: userId,
+      productionUrl: project.production_domain
+        ? `https://${project.production_domain}`
+        : `https://${project.slug}.vercel.app`,
     };
   }
 }
