@@ -10,6 +10,10 @@ function isTestingOrMock(): boolean {
   );
 }
 
+function getDb(): any {
+  return createAdminClient();
+}
+
 // -----------------------------------------------------------------------------
 // Organization Repository
 // -----------------------------------------------------------------------------
@@ -18,7 +22,7 @@ export class OrganizationRepo {
     if (isTestingOrMock()) {
       return InMemoryDatabase.getInstance().organizations.get(id) || null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("organizations")
       .select("*")
@@ -35,7 +39,7 @@ export class OrganizationRepo {
       }
       return null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("organizations")
       .select("*")
@@ -49,7 +53,7 @@ export class OrganizationRepo {
     if (isTestingOrMock()) {
       return Array.from(InMemoryDatabase.getInstance().organizations.values());
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase.from("organizations").select("*");
     if (error) throw error;
     return data || [];
@@ -67,7 +71,7 @@ export class OrganizationRepo {
       InMemoryDatabase.getInstance().organizations.set(id, row);
       return row;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data: created, error } = await supabase
       .from("organizations")
       .insert(row as any)
@@ -93,7 +97,7 @@ export class OrganizationMemberRepo {
       }
       return null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("organization_members")
       .select("*")
@@ -110,7 +114,7 @@ export class OrganizationMemberRepo {
         (m) => m.organization_id === organizationId
       );
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("organization_members")
       .select("*")
@@ -131,7 +135,7 @@ export class OrganizationMemberRepo {
       InMemoryDatabase.getInstance().members.set(`${data.organization_id}:${data.user_id}`, row);
       return row;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data: created, error } = await supabase
       .from("organization_members")
       .insert(row as any)
@@ -151,7 +155,7 @@ export class ProjectRepo {
       const proj = InMemoryDatabase.getInstance().projects.get(id);
       return proj && proj.organization_id === organizationId ? proj : null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("projects")
       .select("*")
@@ -169,7 +173,7 @@ export class ProjectRepo {
       }
       return null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("projects")
       .select("*")
@@ -192,7 +196,7 @@ export class ProjectRepo {
       }
       return null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("projects")
       .select("*")
@@ -209,7 +213,7 @@ export class ProjectRepo {
         (p) => p.organization_id === organizationId
       );
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("projects")
       .select("*")
@@ -230,7 +234,7 @@ export class ProjectRepo {
       InMemoryDatabase.getInstance().projects.set(id, row);
       return row;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data: created, error } = await supabase
       .from("projects")
       .insert(row as any)
@@ -250,7 +254,7 @@ export class IncidentRepo {
       const inc = InMemoryDatabase.getInstance().incidents.get(id);
       return inc && inc.organization_id === organizationId ? inc : null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("incidents")
       .select("*")
@@ -270,7 +274,7 @@ export class IncidentRepo {
       }
       return null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("incidents")
       .select("*")
@@ -287,7 +291,7 @@ export class IncidentRepo {
         (i) => i.organization_id === organizationId
       );
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("incidents")
       .select("*")
@@ -303,7 +307,7 @@ export class IncidentRepo {
         (i) => i.project_id === projectId
       );
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("incidents")
       .select("*")
@@ -325,7 +329,7 @@ export class IncidentRepo {
       InMemoryDatabase.getInstance().incidents.set(id, row);
       return row;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data: created, error } = await supabase
       .from("incidents")
       .insert(row as any)
@@ -343,7 +347,7 @@ export class IncidentRepo {
       InMemoryDatabase.getInstance().incidents.set(id, updated);
       return updated;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("incidents")
       .update({ ...updates, updated_at: new Date().toISOString() } as any)
@@ -365,7 +369,7 @@ export class WorkspaceRepo {
       const ws = InMemoryDatabase.getInstance().workspaces.get(id);
       return ws && ws.organization_id === organizationId ? ws : null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("repair_workspaces")
       .select("*")
@@ -382,7 +386,7 @@ export class WorkspaceRepo {
         (w) => w.organization_id === organizationId
       );
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("repair_workspaces")
       .select("*")
@@ -398,7 +402,7 @@ export class WorkspaceRepo {
         (w) => w.project_id === projectId
       );
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("repair_workspaces")
       .select("*")
@@ -420,7 +424,7 @@ export class WorkspaceRepo {
       InMemoryDatabase.getInstance().workspaces.set(id, row);
       return row;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data: created, error } = await supabase
       .from("repair_workspaces")
       .insert(row as any)
@@ -443,7 +447,7 @@ export class WorkspaceRepo {
       InMemoryDatabase.getInstance().workspaces.set(id, updated);
       return updated;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("repair_workspaces")
       .update({
@@ -471,7 +475,7 @@ export class RepairArtifactRepo {
       }
       return null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("repair_artifacts")
       .select("*")
@@ -495,7 +499,7 @@ export class RepairArtifactRepo {
       db.repairArtifacts.set(id, row);
       return row;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data: created, error } = await supabase
       .from("repair_artifacts")
       .insert(row as any)
@@ -516,7 +520,7 @@ export class CommandRunRepo {
         (c) => c.workspace_id === workspaceId
       );
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("command_runs")
       .select("*")
@@ -537,7 +541,7 @@ export class CommandRunRepo {
       InMemoryDatabase.getInstance().commandRuns.set(id, row);
       return row;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data: created, error } = await supabase
       .from("command_runs")
       .insert(row as any)
@@ -559,7 +563,7 @@ export class PullRequestRepo {
       }
       return null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("pull_requests")
       .select("*")
@@ -580,7 +584,7 @@ export class PullRequestRepo {
       InMemoryDatabase.getInstance().pullRequests.set(id, row);
       return row;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data: created, error } = await supabase
       .from("pull_requests")
       .insert(row as any)
@@ -602,7 +606,7 @@ export class PullRequestRepo {
       InMemoryDatabase.getInstance().pullRequests.set(id, updated);
       return updated;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("pull_requests")
       .update({
@@ -628,7 +632,7 @@ export class DeploymentRepo {
       }
       return null;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("deployments")
       .select("*")
@@ -644,7 +648,7 @@ export class DeploymentRepo {
         (d) => d.project_id === projectId
       );
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("deployments")
       .select("*")
@@ -665,7 +669,7 @@ export class DeploymentRepo {
       InMemoryDatabase.getInstance().deployments.set(id, row);
       return row;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data: created, error } = await supabase
       .from("deployments")
       .insert(row as any)
@@ -686,7 +690,7 @@ export class AuditEventRepo {
         .auditEvents.filter((a) => a.organization_id === organizationId)
         .slice(0, limit);
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data, error } = await supabase
       .from("audit_events")
       .select("*")
@@ -708,7 +712,7 @@ export class AuditEventRepo {
       InMemoryDatabase.getInstance().auditEvents.unshift(row);
       return row;
     }
-    const supabase = createAdminClient();
+    const supabase = getDb();
     const { data: created, error } = await supabase
       .from("audit_events")
       .insert(row as any)
