@@ -20,12 +20,13 @@ export class OpenRouterAIProvider implements AIProvider {
   private modelMap: Record<ModelTier, string>;
 
   constructor() {
-    this.apiKey = process.env.OPENROUTER_API_KEY || "mock-openrouter-key";
+    this.apiKey = process.env.OPENROUTER_API_KEY || "";
+    const defaultModel = process.env.OPENROUTER_MODEL || "openrouter/auto";
     this.modelMap = {
-      analysis: process.env.OPENROUTER_ANALYSIS_MODEL || "anthropic/claude-3.5-sonnet",
-      coding: process.env.OPENROUTER_CODING_MODEL || "anthropic/claude-3.5-sonnet",
-      review: process.env.OPENROUTER_REVIEW_MODEL || "openai/gpt-4o",
-      fast: process.env.OPENROUTER_FAST_MODEL || "openai/gpt-4o-mini",
+      analysis: process.env.OPENROUTER_ANALYSIS_MODEL || defaultModel,
+      coding: process.env.OPENROUTER_CODING_MODEL || defaultModel,
+      review: process.env.OPENROUTER_REVIEW_MODEL || defaultModel,
+      fast: process.env.OPENROUTER_FAST_MODEL || defaultModel,
     };
   }
 
@@ -36,9 +37,11 @@ export class OpenRouterAIProvider implements AIProvider {
   ): Promise<string> {
     const sanitizedUserPrompt = redactSecrets(userPrompt);
 
-    if (!process.env.OPENROUTER_API_KEY) {
-      // Offline fallback mock responses
-      return this.getMockResponse(modelTier);
+    if (!this.apiKey) {
+      if (process.env.NODE_ENV === "test" || process.env.ALLOW_MOCK_PROVIDERS === "true") {
+        return this.getMockResponse(modelTier);
+      }
+      throw new Error("OpenRouter is not configured. Set OPENROUTER_API_KEY before running AI analysis.");
     }
 
     const model = this.modelMap[modelTier];
@@ -47,8 +50,8 @@ export class OpenRouterAIProvider implements AIProvider {
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://engineering.example.com",
-        "X-Title": "AI Engineering Platform",
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://cloud-ide-copilot.vercel.app",
+        "X-Title": "Cloud IDE Copilot",
       },
       body: JSON.stringify({
         model,

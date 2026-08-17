@@ -4,6 +4,7 @@ import type { CodingAgent } from "../providers/agent/agent.interface";
 import type { AIProvider, IncidentDiagnosis, RepairPlan } from "../providers/ai/ai.interface";
 import { AuthGuard } from "../rbac/guard";
 import { IncidentService } from "./incident.service";
+import { ProjectService } from "./project.service";
 import { WorkspaceService } from "./workspace.service";
 
 export class AIAnalysisService {
@@ -30,7 +31,7 @@ export class AIAnalysisService {
       workspace_id: workspaceId || null,
       incident_id: incidentId,
       provider: "openrouter",
-      model: "anthropic/claude-3.5-sonnet",
+      model: process.env.OPENROUTER_ANALYSIS_MODEL || "configured-openrouter-model",
       analysis_type: "incident_diagnosis",
       structured_result: diagnosis,
       created_by: userId,
@@ -62,6 +63,7 @@ export class AIAnalysisService {
     await AuthGuard.assertPermission(userId, organizationId, "workspace:run_ai_repair");
     const workspace = await WorkspaceService.getWorkspace(userId, organizationId, workspaceId);
     const incident = await IncidentService.getIncident(userId, organizationId, incidentId);
+    const project = await ProjectService.getProject(userId, organizationId, workspace.project_id);
 
     // 1. Get or generate diagnosis
     const diagnosis = await this.runIncidentDiagnosis(userId, organizationId, incidentId, aiProvider, workspaceId);
@@ -73,8 +75,9 @@ export class AIAnalysisService {
     // 3. Propose and apply patch via coding agent
     const result = await codingAgent.proposePatch({
       workspaceId: workspace.sandbox_id || workspace.id,
-      repoOwner: "acme-inc",
-      repoName: "onedealer",
+      repoOwner: project.repository_owner,
+      repoName: project.repository_name,
+      branch: project.default_branch,
       incidentTitle: incident.title,
       diagnosis,
     });
@@ -85,7 +88,7 @@ export class AIAnalysisService {
       workspace_id: workspaceId,
       incident_id: incidentId,
       provider: "openhands",
-      model: "anthropic/claude-3.5-sonnet",
+      model: process.env.OPENHANDS_MODEL || "openhands-account-default",
       analysis_type: "repair_plan",
       structured_result: result.repairPlan,
       created_by: userId,

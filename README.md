@@ -1,79 +1,189 @@
-# AI Engineering Platform (`engineering.example.com`)
+# Cloud IDE Copilot
 
-Production-grade, multi-tenant **AI Engineering Platform** that connects GitHub repositories, monitors production errors from Sentry, launches isolated `@vercel/sandbox` execution environments, uses AI coding agents (OpenHands & OpenRouter) to diagnose and repair errors, runs automated validation checks, creates Git branches and PRs, tracks Vercel preview deployments, and enforces explicit human approval gates before production merges.
+A multi-project AI engineering control plane for remote incident triage, coding-agent repairs, deterministic validation, Git/Vercel previews, and human-controlled production releases.
 
----
+Production URL:
 
-## Key Features
-
-- **Multi-Tenant SaaS Foundation**: Organizations, projects, members, incidents, sandboxes, and immutable audit logs isolated with Supabase PostgreSQL Row Level Security (RLS).
-- **Server-Side RBAC**: Granular permissions across `owner`, `admin`, `engineer`, and `viewer` roles.
-- **GitHub App Architecture**: Short-lived installation tokens, protected branch defense (`main`, `master`, `production`), and automated repair branch management (`ai-repair/*`).
-- **Isolated Execution Sandboxes**: Powered by `@vercel/sandbox` with tokenized command allowlisting and shell injection defense.
-- **Sentry Webhook Ingestion**: Signed webhook receiver with timing-safe HMAC-SHA256 signature verification and sensitive data sanitization (stripping tokens, cookies, auth headers, and passwords).
-- **Structured LLM Gateway**: OpenRouter integration with strict Zod validation schemas (`IncidentDiagnosisSchema`, `RepairPlanSchema`, `RiskReviewSchema`) and model routing.
-- **OpenHands Coding Agent Bridge**: Autonomous repository investigation, code AST search, surgical patch proposal, and test generation.
-- **Automated Validation Gate**: Enforces that `install`, `test`, `lint`, `typecheck`, and `build` exit with code 0 before review or PR creation.
-- **Human Production Approval Gate**: AI cannot merge or deploy to production; requires explicit authorization from an owner or authorized admin.
-- **code-server Browser IDE**: Temporary sandbox IDE connection scoped to isolated repair environments.
-- **Trigger.dev Workflow Orchestration**: Background tasks for retryable incident processing, sandbox lifecycles, and cleanup.
-- **Project Memory Ready**: Multi-tenant memory interface prepared for TencentDB Agent Memory in Phase 2.
-- **Mobile-First UX**: Responsive interface designed for on-call triage, AI diagnosis, diff review, and PR approval directly from a phone.
-
----
-
-## Technology Stack
-
-- **Framework**: Next.js 15 (App Router, React 19, TypeScript strict mode)
-- **Styling**: Tailwind CSS
-- **Database & Auth**: Supabase (PostgreSQL, Row Level Security, Triggers)
-- **Git Integration**: GitHub App (`@octokit/app`, `@octokit/rest`)
-- **Sandbox**: Vercel Sandbox (`@vercel/sandbox`) / `code-server`
-- **Error Monitoring**: Sentry signed webhooks
-- **LLM Gateway**: OpenRouter
-- **Coding Agent**: OpenHands
-- **Workflow Orchestration**: Trigger.dev
-- **Testing**: Vitest
-
----
-
-## Quick Start
-
-### 1. Install Dependencies
-```bash
-npm install
+```text
+https://cloud-ide-copilot.vercel.app/
 ```
 
-### 2. Configure Environment
+## Current implementation status
+
+This repository is an **active production-foundation build**, not a fully finished commercial SaaS yet.
+
+### Real provider paths now wired
+
+- **OpenHands Cloud V1 API** — real app-conversation creation, polling, Git change discovery, and diff retrieval.
+- **Trigger.dev** — real `engineering-health-check` and `openhands-repair` tasks.
+- **OpenRouter** — real API required outside tests; missing production credentials fail closed instead of silently returning fake AI output.
+- **GitHub App** — provider/client scaffold exists and the external GitHub App can be configured with short-lived installation tokens.
+- **Sentry webhook verification** — signed-webhook provider code exists.
+
+### Still scaffolded / blocked for production
+
+- Core application data/RBAC still use `InMemoryDatabase` in many runtime paths despite the Supabase migrations existing.
+- `VercelSandboxProvider` is not a real `@vercel/sandbox` implementation yet.
+- Full validation orchestration is intentionally disabled rather than returning fake PASS results.
+- PR/approval API routes still use a mock Git provider.
+- code-server URL/workspace integration is not real yet.
+- several dashboard pages still contain demo data.
+- production multi-tenant authentication/authorization must be wired to Supabase Auth + persisted organization membership before autonomous repair actions are publicly enabled.
+
+See [`SETUP_REQUIRED.md`](SETUP_REQUIRED.md) for the exact production blockers.
+
+---
+
+## Intended architecture
+
+```text
+Sentry incident / operator request
+            |
+            v
+Cloud IDE Copilot (Vercel)
+            |
+       OpenRouter diagnosis
+            |
+            v
+        Trigger.dev
+            |
+            v
+      OpenHands Cloud
+      real coding agent
+            |
+         real Git diff
+            |
+            v
+   [NEXT PHASE: real Vercel Sandbox]
+   test / lint / typecheck / build
+            |
+            v
+   GitHub repair branch + PR
+            |
+            v
+      Vercel Preview
+            |
+            v
+      Human approval
+            |
+            v
+        Production
+```
+
+The agent is **not** the production deployment authority.
+
+---
+
+## Technology stack
+
+- Next.js 15 App Router
+- React 19
+- TypeScript strict mode
+- Tailwind CSS
+- Supabase PostgreSQL/Auth schema foundation
+- GitHub App / Octokit
+- OpenRouter
+- OpenHands Cloud
+- Trigger.dev
+- Sentry
+- Vercel
+- Vitest
+
+Planned/follow-up:
+
+- real `@vercel/sandbox`
+- code-server
+- Playwright + Stagehand audit engine
+- OmniParser visual fallback
+- multi-model release review
+- M-Pesa billing
+- TencentDB Agent Memory behind the memory-provider abstraction
+
+---
+
+## Local setup
+
+### Install
+
+```bash
+npm ci
+```
+
+### Environment
+
 ```bash
 cp .env.example .env.local
 ```
 
-### 3. Run Automated Tests
-```bash
-npm test
-```
+Never commit real credentials.
 
-### 4. Start Local Development Server
+### Development
+
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000).
+
+### Quality checks
+
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run build
+```
+
+---
+
+## OpenHands + Trigger.dev verification
+
+After configuring the external providers, deploy Trigger.dev tasks:
+
+```bash
+npm run trigger:deploy
+```
+
+Check OpenHands directly:
+
+```bash
+npm run openhands:health
+```
+
+Check real Trigger.dev worker execution:
+
+```bash
+npm run trigger:health
+```
+
+Verify the complete Trigger.dev -> OpenHands Cloud connection using a non-critical repository:
+
+```bash
+OPENHANDS_TEST_REPOSITORY=root64bit/cloud-ide-copilot npm run verify:trigger-openhands
+```
+
+The verification task explicitly tells OpenHands not to change files, commit, push, create a PR, or deploy.
+
+Full instructions: [`docs/openhands-trigger-setup.md`](docs/openhands-trigger-setup.md).
 
 ---
 
 ## Documentation
 
-Full architectural and operational documentation is available in `docs/`:
-- [System Architecture](docs/architecture.md)
-- [Security Model & Defense-in-Depth](docs/security-model.md)
-- [Database Schema & Migrations](docs/database.md)
-- [Provider Interfaces & Extensibility](docs/provider-interfaces.md)
-- [GitHub App Setup](docs/github-setup.md)
-- [Vercel & Preview Setup](docs/vercel-setup.md)
-- [Sandbox & Browser IDE](docs/sandbox.md)
-- [Local Development Guide](docs/local-development.md)
-- [Production Deployment Guide](docs/deployment.md)
-- [Environment Variables Reference](docs/environment-variables.md)
-- [Testing & Verification](docs/testing.md)
-- [Product Roadmap](docs/roadmap.md)
+- [Architecture](docs/architecture.md)
+- [Security model](docs/security-model.md)
+- [Database](docs/database.md)
+- [Provider interfaces](docs/provider-interfaces.md)
+- [GitHub setup](docs/github-setup.md)
+- [Vercel setup](docs/vercel-setup.md)
+- [Sandbox](docs/sandbox.md)
+- [OpenHands + Trigger.dev](docs/openhands-trigger-setup.md)
+- [Local development](docs/local-development.md)
+- [Deployment](docs/deployment.md)
+- [Environment variables](docs/environment-variables.md)
+- [Testing](docs/testing.md)
+- [Roadmap](docs/roadmap.md)
+
+Audit package notes:
+
+- [`CHANGES.md`](CHANGES.md)
+- [`SETUP_REQUIRED.md`](SETUP_REQUIRED.md)
+- [`TEST_RESULTS.md`](TEST_RESULTS.md)

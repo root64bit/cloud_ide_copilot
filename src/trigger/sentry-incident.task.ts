@@ -1,10 +1,10 @@
 import { task } from "@trigger.dev/sdk";
 
 /**
- * Trigger.dev Long-Running Task: Process Sentry Incident
- * Dispatched immediately from /api/webhooks/sentry so the webhook responds in milliseconds.
+ * Placeholder orchestration boundary only. Sentry ingestion currently uses in-memory
+ * application state, which cannot be safely shared with Trigger.dev workers. Failing is
+ * safer than claiming an incident was processed when it was not.
  */
-
 export interface ProcessSentryIncidentPayload {
   organizationId: string;
   projectId: string;
@@ -15,11 +15,8 @@ export interface ProcessSentryIncidentPayload {
 export const processSentryIncidentTask = task({
   id: "process-sentry-incident",
   run: async (payload: ProcessSentryIncidentPayload) => {
-    console.log(`[Trigger.dev] Processing Sentry incident: ${payload.incidentId}`);
-    return {
-      success: true,
-      incidentId: payload.incidentId,
-      processedAt: new Date().toISOString(),
-    };
+    throw new Error(
+      `SENTRY_TASK_NOT_WIRED: incident ${payload.incidentId} must be persisted in Supabase before Trigger.dev processing is enabled.`
+    );
   },
 });

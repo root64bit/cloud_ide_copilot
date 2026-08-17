@@ -1,91 +1,97 @@
 # System Architecture
 
-The **AI Engineering Platform** (`engineering.example.com`) is a multi-tenant cloud-native copilot that bridges production error monitoring (Sentry), isolated execution environments (@vercel/sandbox), coding agents (OpenHands & OpenRouter), Git workflows (GitHub App), and Vercel preview/production deployments with mandatory human production approval gates.
+Cloud IDE Copilot is being built as a multi-tenant AI engineering control plane for production incident handling, coding-agent repair, deterministic validation, Git/Vercel preview workflows, and explicit human production approval.
 
----
+This document distinguishes the **target architecture** from the **current implementation**.
 
-## 1. High-Level Architecture Diagram
+## Target architecture
 
 ```text
-+---------------------------------------------------------------------------------------------------+
-|                                       WEB CLIENT / MOBILE                                         |
-|                 (Responsive Next.js 15 App Router + Tailwind CSS + Lucide Icons)                  |
-+-------------------------------------------------+-------------------------------------------------+
-                                                  |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|                                       NEXT.JS SAAS PLATFORM                                       |
-|  - Server-Side RBAC & Auth Guard (Owner, Admin, Engineer, Viewer)                                 |
-|  - Immutable Audit Logger & Sanitized Event Stream                                                |
-|  - Secret Redaction Engine (Zero secret leakage to logs, prompts, or client)                      |
-|  - Webhook Gateways (/api/webhooks/sentry, /api/webhooks/github) with HMAC Verification           |
-+-------------------------------------------------+-------------------------------------------------+
-                                                  |
-        +-----------------------------------------+-----------------------------------------+
-        |                                         |                                         |
-        v                                         v                                         v
-+-----------------------+       +-----------------------------------+       +-----------------------+
-|  DATABASE & TENANCY   |       |       PROVIDER ABSTRACTIONS       |       | WORKFLOW ORCHESTRATOR |
-|  - Supabase Auth      |       |  - GitProvider: GitHub App        |       |  - Trigger.dev Tasks  |
-|  - PostgreSQL with RLS|       |  - DeploymentProvider: Vercel     |       |    * Sentry Ingestion |
-|  - Multi-tenant Orgs  |       |  - IncidentProvider: Sentry       |       |    * Sandbox Lifecycle|
-|  - Append-Only Audit  |       |  - AIProvider: OpenRouter         |       |    * OpenHands Repair |
-|  - State Machines     |       |  - SandboxProvider: Vercel Sandbox|       |    * Validation Gate  |
-|  - Memory Schema      |       |  - CodingAgent: OpenHands         |       |    * PR & Preview     |
-+-----------------------+       |  - Memory: ProjectMemoryProvider  |       +-----------------------+
-                                +-----------------------------------+
-                                                  |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|                                    ISOLATED EXECUTION SANDBOX                                     |
-|  - Vercel Sandbox (@vercel/sandbox)                                                               |
-|  - Strict Command Allowlist (install, test, lint, typecheck, build, git status, git diff)         |
-|  - Zero Production Secrets (Strictly ephemeral staging/mock environments)                         |
-|  - code-server Browser IDE Proxy Gateway                                                          |
-+---------------------------------------------------------------------------------------------------+
+Web / Mobile client
+        |
+        v
+Next.js control plane on Vercel
+        |
+        +-- Supabase Auth + PostgreSQL tenant/RBAC authority
+        +-- GitHub App
+        +-- Sentry
+        +-- OpenRouter
+        |
+        v
+Trigger.dev durable workflow
+        |
+        v
+OpenHands Cloud coding agent
+        |
+     real Git diff
+        |
+        v
+Vercel Sandbox deterministic validation
+  install / test / lint / typecheck / build
+        |
+        v
+GitHub repair branch + PR
+        |
+        v
+Vercel Preview
+        |
+ deterministic + browser + AI audit gates
+        |
+        v
+explicit authorized human approval
+        |
+        v
+production branch / Vercel Production
 ```
 
----
+## Current real boundaries
 
-## 2. Core Service Boundaries
+### OpenHands
 
-### 2.1 Multi-Tenant Organizations & RBAC
-- Every project, incident, workspace, deployment, and audit record is strictly partitioned by `organization_id`.
-- Server-side RBAC enforces four distinct roles:
-  - **Viewer**: Read-only access to projects, incidents, workspaces, deployments.
-  - **Engineer**: Create workspaces, execute allowlisted sandbox commands, trigger AI diagnosis, apply patches, run validation pipelines, open repair PRs.
-  - **Admin**: All engineer permissions + invite members, configure integrations, and authorize production merges.
-  - **Owner**: Full access including billing, organization deletion, and production approval.
+`OpenHandsAgentProvider` now calls the real OpenHands Cloud V1 API. It starts a repository conversation, waits for agent execution, and retrieves real Git changes/diffs. It is not allowed to commit, push, open PRs, merge, or deploy.
 
-### 2.2 GitHub App Integration
-- Utilizes GitHub App with short-lived installation access tokens.
-- No personal access tokens or permanent credentials stored.
-- Read-only operations for repository metadata and commit inspections; write operations strictly restricted to isolated repair branches (`ai-repair/*`).
-- Direct pushes or commits to protected branches (`main`, `master`, `production`, `release`) are blocked server-side.
+### Trigger.dev
 
-### 2.3 Vercel Sandbox & Browser IDE
-- Isolated execution using `@vercel/sandbox`.
-- Zero production secrets enter sandbox environments.
-- Commands execute through a strict tokenized allowlist layer blocking shell injection vectors.
-- Large command outputs are safely truncated and scrubbed of sensitive tokens.
-- `code-server` provides browser-based VS Code editing scoped strictly to the sandbox workspace.
+Real tasks currently wired:
 
-### 2.4 Sentry Webhook Ingestion
-- Real-time ingestion via signed webhook (`/api/webhooks/sentry`).
-- HMAC-SHA256 signature verification with timing-safe equality checks.
-- Sanitization layer strips all `Authorization` headers, cookies, passwords, API keys, and personal identifiers before database persistence.
+```text
+engineering-health-check
+openhands-repair
+```
 
-### 2.5 OpenRouter & OpenHands
-- Structured JSON Schema outputs enforced via Zod (`IncidentDiagnosisSchema`, `RepairPlanSchema`, `RiskReviewSchema`).
-- Multi-tier model routing (Analysis, Coding, Review, Fast/Triage).
-- OpenHands agent coordinates repository investigation, code AST search, minimal patch generation, and test creation.
+The validation, workspace lifecycle, Sentry orchestration, and cleanup tasks intentionally fail closed until the backing persistence/sandbox operations are real.
 
-### 2.6 Validation Gate & Human Production Approval
-- State Machine: `creating -> cloning -> ready -> analyzing -> repairing -> validating -> (validation_failed | ready_for_review) -> pr_created -> preview_ready -> approved -> merged -> completed`.
-- Validation checks (`install`, `test`, `lint`, `typecheck`, `build`) must pass with exit code 0 before a PR can be reviewed.
-- AI is strictly prohibited from merging or deploying to production.
-- Human production approval requires explicit authorization from an owner or authorized admin.
+### OpenRouter
 
-### 2.7 Project Memory (TencentDB Agent Memory Ready)
-- Scoped project memory storing architecture context, coding rules, and past bugfix patterns.
-- Internal scoped database memory implementation with seamless adapter interface for TencentDB Agent Memory in Phase 2.
+OpenRouter is the LLM gateway for structured incident diagnosis/review in the Vercel control plane. In non-test environments, missing credentials now produce a configuration error instead of a fabricated result.
+
+## Current blockers
+
+### Persistence/authentication
+
+The SQL schema and RLS policies exist, but current server services/RBAC/pages still use `InMemoryDatabase` in many paths. This means the database is not yet the runtime multi-tenant authority.
+
+### Vercel Sandbox
+
+The provider interface exists, but the current `VercelSandboxProvider` is simulated. A real `@vercel/sandbox` implementation is the next major infrastructure task.
+
+### Git shipping
+
+The GitHub App provider exists, but the PR/approval API routes still instantiate a mock Git provider and do not yet push the validated OpenHands change set.
+
+### Browser IDE
+
+The code-server concept/UI is not yet backed by a proven isolated workspace.
+
+## Required authority model
+
+The intended hierarchy is:
+
+```text
+AI coding agent = proposes/modifies isolated source
+Vercel Sandbox = deterministic test/build authority
+Audit engine = release evidence / gates
+Human = production approval authority
+```
+
+No AI/provider should be able to skip the release gate and write directly to production.

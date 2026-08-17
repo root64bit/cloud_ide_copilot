@@ -40,36 +40,17 @@ export default function RepairWorkspacePage() {
   const [activeTab, setActiveTab] = useState("diff");
   const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>("ready");
   const [terminalOutput, setTerminalOutput] = useState<string>(
-    "Isolated Vercel Sandbox initialized.\nRepository cloned from acme-inc/onedealer@a9f82d1c5e4b.\nReady for commands."
+    "Workspace loaded. Run a real provider action to begin."
   );
   const [isExecutingCommand, setIsExecutingCommand] = useState(false);
   const [isRepairing, setIsRepairing] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
-
-  const [repairPlan, setRepairPlan] = useState<RepairPlan | null>({
-    title: "Defensive check for undefined discount code in calculateTotal",
-    description: "Adds optional chaining and fallback to prevent TypeError when discount parameter is omitted.",
-    filesToModify: [
-      {
-        filePath: "src/lib/checkout/pricing.ts",
-        description: "Safely handle optional discountCode property",
-        originalSnippet:
-          "let discountAmount = 0;\nif (item.discountCode) {\n  discountAmount = item.price * (item.discountCode.percent / 100);\n}",
-        replacementSnippet:
-          "let discountAmount = 0;\nif (item.discountCode && typeof item.discountCode.percent === 'number') {\n  discountAmount = item.price * (item.discountCode.percent / 100);\n}",
-      },
-    ],
-    testFilesToCreateOrUpdate: [
-      {
-        filePath: "tests/pricing.test.ts",
-        testCode:
-          "import { calculateTotal } from '../src/lib/checkout/pricing';\n\ntest('handles missing discount safely without throwing TypeError', () => {\n  const result = calculateTotal({ items: [{ price: 100 }] });\n  expect(result).toBe(100);\n});",
-      },
-    ],
-    validationSteps: ["npm test", "npx tsc --noEmit", "npm run build"],
-  });
+  const [repairPlan, setRepairPlan] = useState<RepairPlan | null>(null);
+  const [repairDiff, setRepairDiff] = useState<string>("");
+  const [openHandsConversationUrl, setOpenHandsConversationUrl] = useState<string | null>(null);
+  const [triggerRunId, setTriggerRunId] = useState<string | null>(null);
 
   const [validationResult, setValidationResult] = useState<ValidationPipelineResult | null>(null);
 
@@ -82,23 +63,77 @@ export default function RepairWorkspacePage() {
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // 1. Generate AI Repair Patch
+  // 1. Generate AI Repair Patch through a real Trigger.dev -> OpenHands Cloud run
   const handleGenerateRepair = async () => {
     setIsRepairing(true);
+    setRepairDiff("");
+    setOpenHandsConversationUrl(null);
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/repair`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ organizationId: "00000000-0000-0000-0000-000000000001" }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setRepairPlan(data.repairPlan);
-        setWorkspaceStatus("repairing");
-        setTerminalOutput((prev) => `${prev}\n\n[OpenHands Agent] Proposed patch applied to sandbox.`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.message || data?.error || "Unable to queue OpenHands repair");
       }
+
+      if (!data.runId) {
+        throw new Error("Repair route did not return a Trigger.dev run ID");
+      }
+
+      setTriggerRunId(data.runId);
+      setWorkspaceStatus("repairing");
+      setTerminalOutput((prev) => `${prev}
+
+[Trigger.dev] Queued OpenHands repair: ${data.runId}`);
+
+      const deadline = Date.now() + 60 * 60 * 1000;
+      let lastStatus = "";
+
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const runRes = await fetch(`/api/trigger/runs/${encodeURIComponent(data.runId)}`, {
+          cache: "no-store",
+        });
+        const runData = await runRes.json();
+        if (!runRes.ok) {
+          throw new Error(runData?.error || "Unable to retrieve Trigger.dev run");
+        }
+
+        const run = runData.run;
+        if (run?.status && run.status !== lastStatus) {
+          lastStatus = run.status;
+          setTerminalOutput((prev) => `${prev}
+[Trigger.dev] ${data.runId}: ${run.status}`);
+        }
+
+        if (!run?.completed) continue;
+        if (!run.isSuccess) {
+          throw new Error(run.error || `OpenHands repair task ended with status ${run.status}`);
+        }
+
+        const result = run.output;
+        if (!result) throw new Error("Trigger.dev run completed without OpenHands output");
+
+        setRepairPlan(result.repairPlan || null);
+        setRepairDiff(result.diff || "");
+        setOpenHandsConversationUrl(result.conversationUrl || null);
+        setTerminalOutput((prev) =>
+          `${prev}
+[OpenHands] Real Cloud conversation completed: ${result.conversationId || "unknown"}
+[OpenHands] Modified files: ${(result.modifiedFiles || []).join(", ") || "none"}`
+        );
+        return;
+      }
+
+      throw new Error("Timed out waiting for Trigger.dev/OpenHands repair completion");
     } catch (err) {
-      console.error(err);
+      const message = err instanceof Error ? err.message : "OpenHands repair failed";
+      setTerminalOutput((prev) => `${prev}
+
+[Repair Error] ${message}`);
     } finally {
       setIsRepairing(false);
     }
@@ -229,16 +264,21 @@ export default function RepairWorkspacePage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="default" className="font-mono">OneDealer</Badge>
+              <Badge variant="default" className="font-mono">Repair Workspace</Badge>
               <Badge variant={workspaceStatus === "completed" ? "success" : "secondary"}>
                 Status: {workspaceStatus}
               </Badge>
               <span className="text-[11px] text-muted-foreground font-mono">
-                Branch: ai-repair/onedealer-fix-discount-null
+                Agent workspace: changes remain uncommitted until deterministic validation is wired
               </span>
+              {triggerRunId ? (
+                <span className="text-[11px] text-muted-foreground font-mono">
+                  Trigger: {triggerRunId}
+                </span>
+              ) : null}
             </div>
             <h2 className="text-lg font-bold tracking-tight mt-1">
-              Repair Workspace: TypeError in calculateTotal
+              Workspace {workspaceId}
             </h2>
           </div>
 
@@ -256,16 +296,16 @@ export default function RepairWorkspacePage() {
               Generate AI Fix
             </Button>
 
-            <a
-              href="https://ide.engineering.example.com/?sandbox=sbx_demo"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md bg-secondary hover:bg-secondary/80 text-xs font-medium transition-colors"
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              title="code-server is not connected to a real Vercel Sandbox workspace yet"
+              className="gap-1.5"
             >
               <Box className="w-3.5 h-3.5" />
-              <span>Open Browser IDE</span>
-              <ExternalLink className="w-3 h-3 text-muted-foreground" />
-            </a>
+              <span>Browser IDE — not wired</span>
+            </Button>
           </div>
         </div>
       </div>
@@ -304,6 +344,25 @@ export default function RepairWorkspacePage() {
                       diffSummary="Automated Regression Unit Test"
                     />
                   ))}
+
+                  {repairDiff ? (
+                    <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
+                      <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold">OpenHands unified diff</span>
+                        {openHandsConversationUrl ? (
+                          <a
+                            href={openHandsConversationUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-primary hover:underline inline-flex items-center gap-1"
+                          >
+                            Open conversation <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : null}
+                      </div>
+                      <pre className="p-3 overflow-x-auto text-[11px] leading-5 font-mono whitespace-pre">{repairDiff}</pre>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             </div>
@@ -320,13 +379,16 @@ export default function RepairWorkspacePage() {
 
       {activeTab === "terminal" && (
         <div className="space-y-3">
+          <Alert variant="warning" title="Real Vercel Sandbox is not wired yet">
+            Command execution is disabled so the platform cannot fabricate test/build output. The next phase must implement real @vercel/sandbox execution.
+          </Alert>
           <div className="flex items-center gap-2 flex-wrap pb-2">
             <span className="text-xs font-semibold text-muted-foreground">Execute Allowed Command:</span>
             <Button
               size="sm"
               variant="outline"
               onClick={() => handleRunCommand("test")}
-              disabled={isExecutingCommand}
+              disabled
             >
               npm test
             </Button>
@@ -334,7 +396,7 @@ export default function RepairWorkspacePage() {
               size="sm"
               variant="outline"
               onClick={() => handleRunCommand("lint")}
-              disabled={isExecutingCommand}
+              disabled
             >
               npm run lint
             </Button>
@@ -342,7 +404,7 @@ export default function RepairWorkspacePage() {
               size="sm"
               variant="outline"
               onClick={() => handleRunCommand("typecheck")}
-              disabled={isExecutingCommand}
+              disabled
             >
               tsc --noEmit
             </Button>
@@ -350,7 +412,7 @@ export default function RepairWorkspacePage() {
               size="sm"
               variant="outline"
               onClick={() => handleRunCommand("build")}
-              disabled={isExecutingCommand}
+              disabled
             >
               npm run build
             </Button>
@@ -358,7 +420,7 @@ export default function RepairWorkspacePage() {
               size="sm"
               variant="outline"
               onClick={() => handleRunCommand("git_status")}
-              disabled={isExecutingCommand}
+              disabled
             >
               git status
             </Button>
@@ -374,6 +436,7 @@ export default function RepairWorkspacePage() {
           onRunValidation={handleRunValidation}
           isRunning={isValidating}
           result={validationResult}
+          blockedReason="Deterministic validation is intentionally blocked until real @vercel/sandbox install/test/lint/typecheck/build execution is available."
         />
       )}
 
@@ -386,6 +449,7 @@ export default function RepairWorkspacePage() {
           onApproveAndMerge={handleApproveAndMerge}
           isCreatingPr={isCreatingPr}
           isApproving={isApproving}
+          blockedReason="PR creation and production merge are intentionally blocked until OpenHands changes are validated in a real sandbox and pushed with the real GitHub App workflow."
         />
       )}
     </div>

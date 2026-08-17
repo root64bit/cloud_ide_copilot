@@ -1,9 +1,12 @@
 import { task } from "@trigger.dev/sdk";
 
 /**
- * Trigger.dev Long-Running Task: Validation Pipeline
+ * Reserved orchestration entrypoint for the deterministic sandbox validation pipeline.
+ *
+ * IMPORTANT: this task intentionally fails until the Vercel Sandbox provider is switched
+ * from the scaffold implementation to a real @vercel/sandbox-backed workspace. Returning
+ * allPassed=true here would create a dangerous false release gate.
  */
-
 export interface ValidationPipelinePayload {
   organizationId: string;
   projectId: string;
@@ -14,12 +17,8 @@ export interface ValidationPipelinePayload {
 export const validationPipelineTask = task({
   id: "validation-pipeline",
   run: async (payload: ValidationPipelinePayload) => {
-    console.log(`[Trigger.dev] Running validation pipeline for workspace: ${payload.workspaceId}`);
-    return {
-      success: true,
-      workspaceId: payload.workspaceId,
-      allPassed: true,
-      completedAt: new Date().toISOString(),
-    };
+    throw new Error(
+      `VALIDATION_PIPELINE_NOT_WIRED: workspace ${payload.workspaceId} cannot be validated until the real sandbox provider is enabled.`
+    );
   },
 });

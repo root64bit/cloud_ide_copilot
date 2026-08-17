@@ -1,43 +1,78 @@
 # Testing & Verification Strategy
 
-The platform maintains comprehensive test suites covering security, authorization, state transitions, webhook verification, provider implementations, and end-to-end integration flows.
+The project has Vitest unit/integration tests for security primitives, RBAC/state logic, providers, and workflow concepts.
 
----
-
-## 1. Running the Test Suite
+## Standard local checks
 
 ```bash
-# Run all tests once
+npm ci
 npm test
-
-# Run tests with coverage
-npm run test:coverage
-
-# Run tests in watch mode
-npm run test:watch
+npm run typecheck
+npm run lint
+npm run build
 ```
 
----
+## Provider verification added in the OpenHands/Trigger.dev update
 
-## 2. Test Architecture
+### OpenHands Cloud API reachability
 
-### 2.1 Security & Redaction Unit Tests (`tests/unit/security/`)
-- `redaction.test.ts`: Verifies secret masking for Bearer tokens, JWTs, Stripe keys, GitHub tokens, Vercel keys, AWS keys, database connection URLs with passwords, RSA private keys, cookies, and JSON payloads.
-- `allowlist.test.ts`: Verifies command resolution, rejection of dangerous binaries, rejection of shell metacharacters (`;`, `&&`, `|`, `` ` ``, `$(...)`, redirects, etc.), output truncation.
-- `signature.test.ts`: Verifies Sentry HMAC-SHA256 signature verification, timing-safe equality, rejection of invalid signatures, and GitHub webhook signature validation.
-- `branch-guard.test.ts`: Verifies production branch protection (rejection of direct pushes to main/master/production) and repair branch naming conventions.
+```bash
+npm run openhands:health
+```
 
-### 2.2 RBAC & State Machine Tests (`tests/unit/rbac/`, `tests/unit/state-machine/`)
-- `permissions.test.ts`: Verifies role level hierarchy (`owner > admin > engineer > viewer`) and permission matrix enforcement.
-- `workspace-state.test.ts`: Verifies allowed vs disallowed state transitions, validation gate, and human approval gate.
+Requires a local `OPENHANDS_API_KEY` and performs a safe API health call.
 
-### 2.3 Provider Tests (`tests/unit/providers/`, `tests/unit/memory/`)
-- `sentry.test.ts`: Verifies Sentry webhook normalization and data sanitization.
-- `openrouter.test.ts`: Verifies structured Zod schema parsing and model routing.
-- `openhands.test.ts`: Verifies OpenHands coding agent patch proposals.
-- `memory.test.ts`: Verifies organization/project memory scoping and search.
+### Trigger.dev worker
 
-### 2.4 Integration Tests (`tests/integration/`)
-- `tenant-isolation.test.ts`: Verifies that users from Org A cannot read, modify, or create resources in Org B.
-- `validation-gate.test.ts`: Verifies the complete automated validation pipeline inside the sandbox, ensuring exit code 0 is strictly required.
-- `pr-approval-flow.test.ts`: Verifies the end-to-end flow from AI Patch -> Validation -> PR Creation -> Human Production Approval -> Merge.
+```bash
+npm run trigger:health
+```
+
+Queues `engineering-health-check`. A real pass requires the run to exist in Trigger.dev and complete from a Trigger.dev worker.
+
+### Trigger.dev -> OpenHands
+
+```bash
+OPENHANDS_TEST_REPOSITORY=root64bit/cloud-ide-copilot npm run verify:trigger-openhands
+```
+
+The task is explicitly instructed to inspect only and make no repository changes.
+
+A real pass requires both:
+
+```text
+real Trigger.dev run ID
+real OpenHands conversation ID
+```
+
+and both must be visible in their provider dashboards.
+
+## Test doubles
+
+Mock providers may be used in unit tests. They must not be interpreted as production provider verification.
+
+OpenRouter mock responses are now restricted to test mode or explicit `ALLOW_MOCK_PROVIDERS=true`.
+
+## Important current limitation
+
+Some existing integration tests exercise the in-memory service layer and simulated sandbox/PR workflow. They validate logic/state transitions, not real Supabase/Vercel/GitHub cloud execution.
+
+The production-readiness suite must be expanded after the real persistence and Vercel Sandbox phases.
+
+## Planned triple-audit release verification
+
+For major changes, the target release gate is:
+
+```text
+Layer 1: deterministic engineering
+  tests + lint + typecheck + build + security scans
+
+Layer 2: browser QA
+  Playwright -> Stagehand -> OmniParser fallback
+  followed by deterministic DOM/API/DB assertions
+
+Layer 3: independent AI review
+  multiple approved OpenRouter models
+
+Then: explicit human ship approval
+```

@@ -1,212 +1,148 @@
-================================================================================
-AI ENGINEERING PLATFORM - AUDIT PROJECT TREE
-Repository: cloud-ide-copilot
-Commit SHA: 40fdbc103b2f87831cee54d64e0235576adf18ba
-Branch: main
-================================================================================
-
-cloud-ide-copilot/
-├── .env.example
-├── .gitignore
-├── AUDIT_MANIFEST.md
-├── AUDIT_PROJECT_TREE.txt
-├── next.config.ts
-├── package-lock.json
-├── package.json
-├── postcss.config.mjs
-├── README.md
-├── tailwind.config.ts
-├── tsconfig.json
-├── vitest.config.ts
-│
-├── docs/
-│   ├── architecture.md
-│   ├── database.md
-│   ├── deployment.md
-│   ├── environment-variables.md
-│   ├── github-setup.md
-│   ├── local-development.md
-│   ├── provider-interfaces.md
-│   ├── roadmap.md
-│   ├── sandbox.md
-│   ├── security-model.md
-│   ├── testing.md
-│   └── vercel-setup.md
-│
-├── supabase/
-│   ├── seed.sql
-│   └── migrations/
-│       ├── 00001_initial_schema.sql
-│       ├── 00002_rls_policies.sql
-│       ├── 00003_audit_triggers.sql
-│       └── 00004_project_memory.sql
-│
-├── src/
-│   ├── app/
-│   │   ├── globals.css
-│   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   │
-│   │   ├── (dashboard)/
-│   │   │   └── [orgSlug]/
-│   │   │       ├── layout.tsx
-│   │   │       ├── page.tsx
-│   │   │       ├── audit/
-│   │   │       │   └── page.tsx
-│   │   │       ├── deployments/
-│   │   │       │   └── page.tsx
-│   │   │       ├── incidents/
-│   │   │       │   └── page.tsx
-│   │   │       ├── projects/
-│   │   │       │   ├── page.tsx
-│   │   │       │   ├── new/
-│   │   │       │   │   └── page.tsx
-│   │   │       │   └── [projectSlug]/
-│   │   │       │       ├── page.tsx
-│   │   │       │       └── incidents/
-│   │   │       │           └── [incidentId]/
-│   │   │       │               └── page.tsx
-│   │   │       ├── settings/
-│   │   │       │   └── page.tsx
-│   │   │       ├── team/
-│   │   │       │   └── page.tsx
-│   │   │       └── workspaces/
-│   │   │           ├── page.tsx
-│   │   │           └── [workspaceId]/
-│   │   │               └── page.tsx
-│   │   │
-│   │   └── api/
-│   │       ├── health/
-│   │       │   └── route.ts
-│   │       ├── projects/
-│   │       │   └── route.ts
-│   │       ├── webhooks/
-│   │       │   ├── github/
-│   │       │   │   └── route.ts
-│   │       │   └── sentry/
-│   │       │       └── route.ts
-│   │       └── workspaces/
-│   │           └── [workspaceId]/
-│   │               ├── analyze/
-│   │               │   └── route.ts
-│   │               ├── approve/
-│   │               │   └── route.ts
-│   │               ├── commands/
-│   │               │   └── route.ts
-│   │               ├── pr/
-│   │               │   └── route.ts
-│   │               ├── repair/
-│   │               │   └── route.ts
-│   │               ├── stop/
-│   │               │   └── route.ts
-│   │               └── validate/
-│   │                   └── route.ts
-│   │
-│   ├── components/
-│   │   ├── audit/
-│   │   │   └── audit-event-list.tsx
-│   │   ├── incident/
-│   │   │   ├── ai-diagnosis-card.tsx
-│   │   │   └── incident-card.tsx
-│   │   ├── layout/
-│   │   │   ├── mobile-nav.tsx
-│   │   │   ├── navbar.tsx
-│   │   │   ├── org-switcher.tsx
-│   │   │   └── sidebar.tsx
-│   │   ├── ui/
-│   │   │   ├── alert.tsx
-│   │   │   ├── badge.tsx
-│   │   │   ├── button.tsx
-│   │   │   ├── card.tsx
-│   │   │   ├── diff-viewer.tsx
-│   │   │   ├── input.tsx
-│   │   │   ├── modal.tsx
-│   │   │   ├── tabs.tsx
-│   │   │   └── terminal-output.tsx
-│   │   └── workspace/
-│   │       ├── pr-approval-view.tsx
-│   │       └── validation-pipeline-view.tsx
-│   │
-│   ├── lib/
-│   │   ├── errors.ts
-│   │   ├── utils.ts
-│   │   ├── audit/
-│   │   │   └── logger.ts
-│   │   ├── security/
-│   │   │   ├── allowlist.ts
-│   │   │   ├── branch-guard.ts
-│   │   │   ├── redaction.ts
-│   │   │   └── signature.ts
-│   │   └── supabase/
-│   │       ├── client.ts
-│   │       ├── server.ts
-│   │       └── types.ts
-│   │
-│   ├── server/
-│   │   ├── providers/
-│   │   │   ├── agent/
-│   │   │   │   ├── agent.interface.ts
-│   │   │   │   └── openhands.provider.ts
-│   │   │   ├── ai/
-│   │   │   │   ├── ai.interface.ts
-│   │   │   │   ├── openrouter.provider.ts
-│   │   │   │   └── prompts.ts
-│   │   │   ├── deployment/
-│   │   │   │   ├── deployment.interface.ts
-│   │   │   │   └── vercel.provider.ts
-│   │   │   ├── git/
-│   │   │   │   ├── git.interface.ts
-│   │   │   │   ├── github.provider.ts
-│   │   │   │   └── mock.provider.ts
-│   │   │   ├── incident/
-│   │   │   │   ├── incident.interface.ts
-│   │   │   │   └── sentry.provider.ts
-│   │   │   ├── memory/
-│   │   │   │   ├── database-memory.provider.ts
-│   │   │   │   ├── memory.interface.ts
-│   │   │   │   └── tencent-memory.provider.ts
-│   │   │   └── sandbox/
-│   │   │       ├── mock-sandbox.provider.ts
-│   │   │       ├── sandbox.interface.ts
-│   │   │       └── vercel-sandbox.provider.ts
-│   │   ├── rbac/
-│   │   │   ├── guard.ts
-│   │   │   ├── permissions.ts
-│   │   │   └── roles.ts
-│   │   ├── services/
-│   │   │   ├── ai-analysis.service.ts
-│   │   │   ├── git-pr.service.ts
-│   │   │   ├── incident.service.ts
-│   │   │   ├── project.service.ts
-│   │   │   ├── validation.service.ts
-│   │   │   └── workspace.service.ts
-│   │   └── state-machine/
-│   │       └── workspace-state.ts
-│   │
-│   └── trigger/
-│       ├── sentry-incident.task.ts
-│       ├── validation-pipeline.task.ts
-│       ├── workspace-cleanup.task.ts
-│       └── workspace-lifecycle.task.ts
-│
-└── tests/
-    ├── integration/
-    │   ├── pr-approval-flow.test.ts
-    │   ├── tenant-isolation.test.ts
-    │   └── validation-gate.test.ts
-    └── unit/
-        ├── memory/
-        │   └── memory.test.ts
-        ├── providers/
-        │   ├── openhands.test.ts
-        │   ├── openrouter.test.ts
-        │   └── sentry.test.ts
-        ├── rbac/
-        │   └── permissions.test.ts
-        ├── security/
-        │   ├── allowlist.test.ts
-        │   ├── branch-guard.test.ts
-        │   ├── redaction.test.ts
-        │   └── signature.test.ts
-        └── state-machine/
-            └── workspace-state.test.ts
+.env.example
+.gitignore
+AUDIT_MANIFEST.md
+AUDIT_PROJECT_TREE.txt
+CHANGES.md
+README.md
+SETUP_REQUIRED.md
+TEST_RESULTS.md
+docs/architecture.md
+docs/database.md
+docs/deployment.md
+docs/environment-variables.md
+docs/github-setup.md
+docs/local-development.md
+docs/openhands-trigger-setup.md
+docs/provider-interfaces.md
+docs/roadmap.md
+docs/sandbox.md
+docs/security-model.md
+docs/testing.md
+docs/vercel-setup.md
+next-env.d.ts
+next.config.ts
+package-lock.json
+package.json
+postcss.config.mjs
+scripts/verify-openhands-health.mjs
+scripts/verify-trigger-health.mjs
+scripts/verify-trigger-openhands.mjs
+sentry.client.config.ts
+sentry.edge.config.ts
+sentry.server.config.ts
+src/app/(dashboard)/[orgSlug]/audit/page.tsx
+src/app/(dashboard)/[orgSlug]/deployments/page.tsx
+src/app/(dashboard)/[orgSlug]/incidents/page.tsx
+src/app/(dashboard)/[orgSlug]/layout.tsx
+src/app/(dashboard)/[orgSlug]/page.tsx
+src/app/(dashboard)/[orgSlug]/projects/[projectSlug]/page.tsx
+src/app/(dashboard)/[orgSlug]/projects/new/page.tsx
+src/app/(dashboard)/[orgSlug]/projects/page.tsx
+src/app/(dashboard)/[orgSlug]/settings/page.tsx
+src/app/(dashboard)/[orgSlug]/team/page.tsx
+src/app/(dashboard)/[orgSlug]/workspaces/[workspaceId]/page.tsx
+src/app/(dashboard)/[orgSlug]/workspaces/page.tsx
+src/app/api/health/route.ts
+src/app/api/integrations/github/setup/route.ts
+src/app/api/projects/route.ts
+src/app/api/trigger/health/route.ts
+src/app/api/trigger/runs/[runId]/route.ts
+src/app/api/webhooks/github/route.ts
+src/app/api/webhooks/sentry/route.ts
+src/app/api/workspaces/[workspaceId]/analyze/route.ts
+src/app/api/workspaces/[workspaceId]/approve/route.ts
+src/app/api/workspaces/[workspaceId]/commands/route.ts
+src/app/api/workspaces/[workspaceId]/pr/route.ts
+src/app/api/workspaces/[workspaceId]/repair/route.ts
+src/app/api/workspaces/[workspaceId]/stop/route.ts
+src/app/api/workspaces/[workspaceId]/validate/route.ts
+src/app/global-error.tsx
+src/app/globals.css
+src/app/layout.tsx
+src/app/page.tsx
+src/components/audit/audit-event-list.tsx
+src/components/incident/ai-diagnosis-card.tsx
+src/components/incident/incident-card.tsx
+src/components/layout/mobile-nav.tsx
+src/components/layout/navbar.tsx
+src/components/layout/org-switcher.tsx
+src/components/layout/sidebar.tsx
+src/components/ui/alert.tsx
+src/components/ui/badge.tsx
+src/components/ui/button.tsx
+src/components/ui/card.tsx
+src/components/ui/diff-viewer.tsx
+src/components/ui/input.tsx
+src/components/ui/modal.tsx
+src/components/ui/tabs.tsx
+src/components/ui/terminal-output.tsx
+src/components/workspace/pr-approval-view.tsx
+src/components/workspace/validation-pipeline-view.tsx
+src/instrumentation.ts
+src/lib/audit/logger.ts
+src/lib/errors.ts
+src/lib/security/allowlist.ts
+src/lib/security/branch-guard.ts
+src/lib/security/redaction.ts
+src/lib/security/signature.ts
+src/lib/supabase/client.ts
+src/lib/supabase/server.ts
+src/lib/supabase/types.ts
+src/lib/utils.ts
+src/server/providers/agent/agent.interface.ts
+src/server/providers/agent/openhands-cloud.client.ts
+src/server/providers/agent/openhands.provider.ts
+src/server/providers/ai/ai.interface.ts
+src/server/providers/ai/openrouter.provider.ts
+src/server/providers/ai/prompts.ts
+src/server/providers/deployment/deployment.interface.ts
+src/server/providers/deployment/vercel.provider.ts
+src/server/providers/git/git.interface.ts
+src/server/providers/git/github.provider.ts
+src/server/providers/git/mock.provider.ts
+src/server/providers/incident/incident.interface.ts
+src/server/providers/incident/sentry.provider.ts
+src/server/providers/memory/database-memory.provider.ts
+src/server/providers/memory/memory.interface.ts
+src/server/providers/memory/tencent-memory.provider.ts
+src/server/providers/sandbox/mock-sandbox.provider.ts
+src/server/providers/sandbox/sandbox.interface.ts
+src/server/providers/sandbox/vercel-sandbox.provider.ts
+src/server/rbac/guard.ts
+src/server/rbac/permissions.ts
+src/server/rbac/roles.ts
+src/server/services/ai-analysis.service.ts
+src/server/services/git-pr.service.ts
+src/server/services/incident.service.ts
+src/server/services/project.service.ts
+src/server/services/validation.service.ts
+src/server/services/workspace.service.ts
+src/server/state-machine/workspace-state.ts
+src/trigger/engineering-health.task.ts
+src/trigger/openhands-repair.task.ts
+src/trigger/sentry-incident.task.ts
+src/trigger/validation-pipeline.task.ts
+src/trigger/workspace-cleanup.task.ts
+src/trigger/workspace-lifecycle.task.ts
+supabase/migrations/00001_initial_schema.sql
+supabase/migrations/00002_rls_policies.sql
+supabase/migrations/00003_audit_triggers.sql
+supabase/migrations/00004_project_memory.sql
+supabase/seed.sql
+tailwind.config.ts
+tests/integration/pr-approval-flow.test.ts
+tests/integration/tenant-isolation.test.ts
+tests/integration/validation-gate.test.ts
+tests/unit/memory/memory.test.ts
+tests/unit/providers/openhands.test.ts
+tests/unit/providers/openrouter.test.ts
+tests/unit/providers/sentry.test.ts
+tests/unit/rbac/permissions.test.ts
+tests/unit/security/allowlist.test.ts
+tests/unit/security/branch-guard.test.ts
+tests/unit/security/redaction.test.ts
+tests/unit/security/signature.test.ts
+tests/unit/state-machine/workspace-state.test.ts
+trigger.config.ts
+tsconfig.json
+vitest.config.ts

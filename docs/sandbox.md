@@ -1,38 +1,51 @@
-# Sandbox Architecture & code-server Browser IDE
+# Sandbox Architecture & Browser IDE
 
-The platform utilizes **Vercel Sandbox** (`@vercel/sandbox`) for isolated workspace execution, dependency installation, running tests, and hosting `code-server` for browser-based IDE editing.
+## Current status
 
----
+`SandboxProvider` and command-safety utilities exist, but the current `VercelSandboxProvider` is still a simulation and must **not** be treated as real release evidence.
 
-## 1. Sandbox Isolation Model
+The real `@vercel/sandbox` implementation is a required next phase.
 
-- **Ephemeral Lifecycles**: Sandboxes are created on-demand when an incident is opened or an engineer requests a workspace.
-- **Configurable TTL & Inactivity**: Sandboxes expire automatically after 60 minutes of inactivity (managed by Trigger.dev cron task `workspace-cleanup`).
-- **Zero Production Secrets**: No real production API keys, Supabase service keys, or database credentials are provided to the sandbox container. Staging or mock variables are injected where required.
+## Intended isolation model
 
----
+Each repair should receive its own isolated workspace containing:
 
-## 2. Command Allowlisting & Shell Injection Defense
+```text
+selected repository
+selected base commit
+repair branch context
+safe/staging environment variables only
+package manager/toolchain
+allowlisted validation commands
+```
 
-Commands execute through `src/lib/security/allowlist.ts`:
-- Validates binary against approved allowlist (`npm`, `pnpm`, `yarn`, `bun`, `npx`, `git`, `node`, `vitest`, `jest`, `eslint`, `tsc`, `next`, `turbo`).
-- Blocks all shell metacharacters (`;`, `&&`, `|`, `` ` ``, `$(...)`, `>`, `<`).
-- Restricts Git commands to safe status, diff, branch inspection, and commits on `ai-repair/*` branches.
-- Truncates output to prevent memory exhaustion and redacts all secrets before persistence in `command_runs`.
+Production credentials must not be copied into the sandbox by default.
 
----
+## Intended OpenHands -> validation handoff
 
-## 3. code-server Browser IDE
+OpenHands Cloud is currently a separate coding-agent execution environment. The target deterministic flow is:
 
-- `code-server` runs inside the sandbox container.
-- Accessible via a time-limited signed session token:
-  `https://ide.engineering.example.com/?sandbox=sbx_123&token=base64url_token`
-- Scoped strictly to the isolated temporary repository directory.
-- Edits made in `code-server` affect only the sandbox filesystem and are committed to `ai-repair/*` when ready.
-- Never directly connected to production infrastructure.
+```text
+OpenHands Cloud
+  -> real uncommitted Git diff
+  -> retrieve diff through OpenHands V1 API
+  -> create deterministic Vercel Sandbox
+  -> clone the same repository/base commit
+  -> apply the diff
+  -> actual install/test/lint/typecheck/build
+  -> persist real exit codes/output
+```
 
----
+OpenHands output alone is never proof that a test/build passed.
 
-## 4. Future Sandbox Alternative: CubeSandbox
+## Command safety
 
-If high sandbox density, self-hosting on private cloud clusters, or infrastructure independence becomes necessary, **CubeSandbox** (https://github.com/tencentcloud/CubeSandbox) can be swapped in behind the `SandboxProvider` interface without modifying application logic.
+`src/lib/security/allowlist.ts` provides the existing allowlist/shell-injection boundary. When real Sandbox execution is added, all platform-triggered commands must pass through the allowlist and their output must be truncated/redacted before persistence.
+
+## Browser IDE
+
+code-server remains planned/partial. The final IDE must be scoped to the isolated repair workspace, protected by authenticated short-lived access, and must never point at a production filesystem.
+
+## Future alternative
+
+CubeSandbox may be considered later behind `SandboxProvider` if self-hosting, cost, scale, or cloud independence justify replacing Vercel Sandbox.

@@ -28,6 +28,7 @@ export interface PrApprovalViewProps {
   onApproveAndMerge: (notes: string) => void;
   isCreatingPr?: boolean;
   isApproving?: boolean;
+  blockedReason?: string;
 }
 
 export function PrApprovalView({
@@ -38,6 +39,7 @@ export function PrApprovalView({
   onApproveAndMerge,
   isCreatingPr,
   isApproving,
+  blockedReason,
 }: PrApprovalViewProps) {
   const [approvalNotes, setApprovalNotes] = useState("");
   const [confirmedSafe, setConfirmedSafe] = useState(false);
@@ -64,6 +66,11 @@ export function PrApprovalView({
       </CardHeader>
 
       <CardContent className="p-4 space-y-4 text-xs">
+        {blockedReason ? (
+          <Alert variant="warning" title="Release path not enabled yet">
+            {blockedReason}
+          </Alert>
+        ) : null}
         {/* PR Section */}
         {!pullRequest ? (
           <div className="p-4 rounded-md border border-dashed text-center space-y-3 bg-secondary/20">
@@ -79,7 +86,7 @@ export function PrApprovalView({
               size="sm"
               onClick={onCreatePr}
               isLoading={isCreatingPr}
-              disabled={isCreatingPr || workspaceStatus === "stopped"}
+              disabled={Boolean(blockedReason) || isCreatingPr || workspaceStatus === "stopped"}
               className="gap-1.5"
             >
               <GitPullRequest className="w-3.5 h-3.5" />
@@ -191,7 +198,7 @@ export function PrApprovalView({
                 size="sm"
                 onClick={() => onApproveAndMerge(approvalNotes)}
                 isLoading={isApproving}
-                disabled={!confirmedSafe || !pullRequest || isApproving || isMerged}
+                disabled={Boolean(blockedReason) || !confirmedSafe || !pullRequest || isApproving || isMerged}
                 className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 <ShieldCheck className="w-4 h-4" />

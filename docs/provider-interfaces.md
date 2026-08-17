@@ -89,7 +89,7 @@ export interface SandboxProvider {
   getBrowserIdeUrl(sandboxId: string): Promise<string>;
 }
 ```
-- **Primary**: `VercelSandboxProvider` (`@vercel/sandbox`)
+- **Target primary**: `VercelSandboxProvider` (`@vercel/sandbox`) — **currently simulated; real SDK execution not yet wired**
 - **Testing**: `MockSandboxProvider`
 - **Future Alternative**: `CubeSandboxProvider`
 
@@ -100,10 +100,10 @@ export interface SandboxProvider {
 export interface CodingAgent {
   analyzeWorkspace(context: CodingAgentTaskContext): Promise<IncidentDiagnosis>;
   proposePatch(context: CodingAgentTaskContext): Promise<CodingAgentResult>;
-  continueTask(workspaceId: string, instruction: string): Promise<CodingAgentResult>;
+  continueTask(conversationId: string, instruction: string): Promise<CodingAgentResult>;
 }
 ```
-- **Primary**: `OpenHandsAgentProvider`
+- **Primary**: `OpenHandsAgentProvider` — real OpenHands Cloud V1 app-conversation client
 
 ---
 
@@ -121,5 +121,5 @@ export interface ProjectMemoryProvider {
   getArchitectureContext(organizationId: string, projectId: string): Promise<string>;
 }
 ```
-- **Primary**: `DatabaseMemoryProvider` (Scoped PostgreSQL)
+- **Current scaffold**: `DatabaseMemoryProvider` (currently backed by in-memory runtime storage, not PostgreSQL authority yet)
 - **Phase 2**: `TencentAgentMemoryProvider` (TencentDB Agent Memory)

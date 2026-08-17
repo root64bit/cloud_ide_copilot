@@ -11,7 +11,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "trigger:dev": "trigger.dev dev",
+    "trigger:deploy": "trigger.dev deploy",
+    "trigger:health": "node scripts/verify-trigger-health.mjs",
+    "openhands:health": "node scripts/verify-openhands-health.mjs",
+    "verify:trigger-openhands": "node scripts/verify-trigger-openhands.mjs"
   },
   "dependencies": {
     "@octokit/app": "^15.1.4",

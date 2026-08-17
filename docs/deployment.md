@@ -1,32 +1,60 @@
-# Production Deployment Guide
+# Deployment Guide
 
-Instructions for deploying the AI Engineering Platform to Vercel and connecting Supabase.
+Production application URL:
 
----
+```text
+https://cloud-ide-copilot.vercel.app/
+```
 
-## 1. Database Setup (Supabase)
+## Vercel control plane
 
-1. Create a new Supabase project.
-2. In the Supabase SQL Editor, run the database migrations in order:
-   - `supabase/migrations/00001_initial_schema.sql`
-   - `supabase/migrations/00002_rls_policies.sql`
-   - `supabase/migrations/00003_audit_triggers.sql`
-   - `supabase/migrations/00004_project_memory.sql`
-3. Optionally run `supabase/seed.sql` for initial seed data.
+Configure the server-side provider secrets documented in `docs/environment-variables.md` and redeploy after environment changes.
 
----
+For the OpenHands/Trigger.dev repair path, Vercel currently needs at minimum:
 
-## 2. Deploy to Vercel
+```text
+TRIGGER_SECRET_KEY=<Trigger.dev production environment secret>
+OPENROUTER_API_KEY=<OpenRouter key>
+```
 
-1. Push your repository to GitHub.
-2. Import the project in Vercel.
-3. Configure the environment variables (see `docs/environment-variables.md`).
-4. Set Framework Preset: `Next.js`.
-5. Deploy.
+Do not expose either with `NEXT_PUBLIC_`.
 
----
+## Trigger.dev deployment
 
-## 3. Webhook Endpoints Configuration
+Confirm `trigger.config.ts` points at your real Trigger.dev project, then deploy tasks:
 
-- **Sentry Alert Rule Webhook**: Point to `https://engineering.example.com/api/webhooks/sentry`
-- **GitHub App Webhook**: Point to `https://engineering.example.com/api/webhooks/github`
+```bash
+npm run trigger:deploy
+```
+
+Configure `OPENHANDS_API_KEY` in the Trigger.dev environment used by that deployment.
+
+See `docs/openhands-trigger-setup.md`.
+
+## Supabase
+
+The existing SQL migrations should be applied in order when moving to the real persistence phase:
+
+```text
+00001_initial_schema.sql
+00002_rls_policies.sql
+00003_audit_triggers.sql
+00004_project_memory.sql
+```
+
+However, applying the migrations alone does not make the current application production-persistent. Core services must first be migrated off `InMemoryDatabase`.
+
+## Webhooks
+
+Current intended endpoints:
+
+```text
+https://cloud-ide-copilot.vercel.app/api/webhooks/github
+https://cloud-ide-copilot.vercel.app/api/webhooks/sentry
+```
+
+Enable external webhooks only after the corresponding route is deployed, secrets are configured, signature verification is tested, and persistence/tenant mapping is correct.
+
+## Production-readiness warning
+
+Do not enable autonomous production repair/ship for customers yet. The current blockers are documented in `SETUP_REQUIRED.md` and `AUDIT_MANIFEST.md`.

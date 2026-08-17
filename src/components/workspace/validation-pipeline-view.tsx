@@ -12,6 +12,7 @@ export interface ValidationPipelineViewProps {
   onRunValidation: () => void;
   isRunning?: boolean;
   result?: ValidationPipelineResult | null;
+  blockedReason?: string;
 }
 
 export function ValidationPipelineView({
@@ -19,6 +20,7 @@ export function ValidationPipelineView({
   onRunValidation,
   isRunning,
   result,
+  blockedReason,
 }: ValidationPipelineViewProps) {
   const steps = [
     { key: "install", label: "Dependency Installation (npm ci)" },
@@ -44,7 +46,7 @@ export function ValidationPipelineView({
           size="sm"
           onClick={onRunValidation}
           isLoading={isRunning}
-          disabled={isRunning || workspaceStatus === "stopped"}
+          disabled={Boolean(blockedReason) || isRunning || workspaceStatus === "stopped"}
           className="gap-1.5"
         >
           <Play className="w-3.5 h-3.5" />
@@ -53,6 +55,12 @@ export function ValidationPipelineView({
       </CardHeader>
 
       <CardContent className="p-4 space-y-3">
+        {blockedReason ? (
+          <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 flex items-start gap-2">
+            <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{blockedReason}</span>
+          </div>
+        ) : null}
         <div className="space-y-2">
           {steps.map((step, idx) => {
             const stepResult = result?.stepResults?.find((r) => r.step === step.key);

@@ -1,9 +1,9 @@
 import { task } from "@trigger.dev/sdk";
 
 /**
- * Trigger.dev Long-Running Task: Workspace Lifecycle (Create & Clone)
+ * Reserved orchestration entrypoint for Vercel Sandbox workspace creation/cloning.
+ * It deliberately fails instead of reporting a simulated ready workspace.
  */
-
 export interface WorkspaceLifecyclePayload {
   organizationId: string;
   projectId: string;
@@ -16,12 +16,8 @@ export interface WorkspaceLifecyclePayload {
 export const workspaceLifecycleTask = task({
   id: "workspace-lifecycle",
   run: async (payload: WorkspaceLifecyclePayload) => {
-    console.log(`[Trigger.dev] Initializing workspace sandbox: ${payload.workspaceId}`);
-    return {
-      success: true,
-      workspaceId: payload.workspaceId,
-      status: "ready",
-      completedAt: new Date().toISOString(),
-    };
+    throw new Error(
+      `WORKSPACE_LIFECYCLE_NOT_WIRED: workspace ${payload.workspaceId} requires the real @vercel/sandbox provider before this task can run.`
+    );
   },
 });
