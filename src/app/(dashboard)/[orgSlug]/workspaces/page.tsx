@@ -18,10 +18,35 @@ export default async function WorkspacesListPage({ params }: { params: Promise<{
 
   return (
     <div className="space-y-6">
-      <div><h2 className="text-xl font-bold tracking-tight">Repair Workspaces</h2><p className="text-xs text-muted-foreground mt-0.5">Persisted repair sessions backed by isolated Vercel Sandbox instances.</p></div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">AI Copilot Workspaces</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Persisted repair sessions backed by isolated Vercel Sandbox instances and OpenRouter models.</p>
+        </div>
+        <Link href={`/${orgSlug}/workspaces/demo`}>
+          <Button size="sm" className="gap-1.5 bg-[#00E5FF] text-[#00363D] hover:bg-[#00E5FF]/90 font-semibold text-xs shadow-sm">
+            Launch Copilot Chat &rarr;
+          </Button>
+        </Link>
+      </div>
       <div className="space-y-3">
         {workspaces.length === 0 ? (
-          <Card><CardContent className="p-8 text-center"><Box className="w-8 h-8 text-muted-foreground mx-auto mb-2" /><h4 className="text-sm font-medium">No repair workspaces</h4><p className="text-xs text-muted-foreground mt-1">Create one from a connected project or incident.</p></CardContent></Card>
+          <Card>
+            <CardContent className="p-8 text-center space-y-3">
+              <Box className="w-8 h-8 text-primary mx-auto" />
+              <div>
+                <h4 className="text-sm font-medium">No active workspaces</h4>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Launch an interactive Copilot playground or create a workspace from a connected repository.
+                </p>
+              </div>
+              <Link href={`/${orgSlug}/workspaces/demo`}>
+                <Button size="sm" className="gap-1.5 bg-[#00E5FF] text-[#00363D] hover:bg-[#00E5FF]/90 font-semibold text-xs shadow-sm">
+                  Start AI Copilot Chat &rarr;
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
         ) : workspaces.map((ws: any) => {
           const project = projects.find((p: any) => p.id === ws.project_id);
           return (

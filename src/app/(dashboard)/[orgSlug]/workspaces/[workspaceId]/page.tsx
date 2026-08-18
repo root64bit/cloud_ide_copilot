@@ -143,7 +143,7 @@ export default function RepairWorkspacePage() {
   }, [workspaceId, workspaceStatus, isApproving]);
 
   // 1. Generate AI Repair Patch through Trigger.dev -> OpenHands Cloud run
-  const handleGenerateRepair = async (customInstructions?: string) => {
+  const handleGenerateRepair = async (customInstructions?: string, model?: string) => {
     setIsRepairing(true);
     setRepairDiff("");
     setOpenHandsConversationUrl(null);
@@ -153,6 +153,7 @@ export default function RepairWorkspacePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instructions: customInstructions || undefined,
+          model: model || undefined,
         }),
       });
       const data = await res.json();

@@ -34,6 +34,14 @@ export interface CopilotMessage {
   };
 }
 
+export const OPENROUTER_MODELS = [
+  { id: "anthropic/claude-3.7-sonnet", name: "Claude 3.7 Sonnet", tag: "Hybrid Reasoning", badge: "Default" },
+  { id: "deepseek/deepseek-r1", name: "DeepSeek R1", tag: "Deep Reasoning", badge: "Reasoning" },
+  { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", tag: "Fast Coding", badge: "Popular" },
+  { id: "openai/gpt-4o", name: "GPT-4o", tag: "Omni Intelligence", badge: "OpenAI" },
+  { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", tag: "Fast & Lightweight", badge: "Fast" },
+];
+
 export function CopilotChatPanel({
   isRepairing,
   workspaceStatus,
@@ -46,30 +54,34 @@ export function CopilotChatPanel({
 }: {
   isRepairing: boolean;
   workspaceStatus: string;
-  onGenerateRepair: (instructions?: string) => Promise<void>;
+  onGenerateRepair: (instructions?: string, model?: string) => Promise<void>;
   onRunValidation: () => Promise<void>;
   onCreatePr: () => Promise<void>;
   attachedChips: string[];
   onRemoveChip: (chip: string) => void;
   onAddChip: (chip: string) => void;
 }) {
+  const [selectedModel, setSelectedModel] = useState("anthropic/claude-3.7-sonnet");
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [promptInput, setPromptInput] = useState("");
   const [agentMode, setAgentMode] = useState<"agent" | "diagnostic" | "patch">("agent");
   const [messages, setMessages] = useState<CopilotMessage[]>([
     {
       id: "1",
       sender: "system",
-      text: "OQVEN Copilot connected. Attached to Vercel Sandbox & OpenHands Cloud engine.",
+      text: "OQVEN Copilot connected. Attached to Vercel Sandbox & OpenRouter AI Engine.",
       timestamp: "Just now",
     },
     {
       id: "2",
       sender: "copilot",
-      text: "I am analyzing the workspace repository. Type a prompt below or click any quick action to generate a verified repair.",
+      text: "I am ready. Choose your AI model (Claude 3.7 / DeepSeek R1 / GPT-4o), type a prompt or click quick actions to make changes and fix errors.",
       timestamp: "Just now",
       contextChips: ["@auth.service.ts"],
     },
   ]);
+
+  const activeModelObj = OPENROUTER_MODELS.find((m) => m.id === selectedModel) || OPENROUTER_MODELS[0];
 
   const handleSendPrompt = async () => {
     if (!promptInput.trim() || isRepairing) return;
@@ -87,11 +99,11 @@ export function CopilotChatPanel({
     setMessages((prev) => [...prev, newMsg]);
 
     try {
-      await onGenerateRepair(userText);
+      await onGenerateRepair(userText, selectedModel);
       const copilotResponse: CopilotMessage = {
         id: String(Date.now() + 1),
         sender: "copilot",
-        text: `Queued task with prompt: "${userText}". OpenHands is generating an isolated patch in Vercel Sandbox.`,
+        text: `[${activeModelObj.name}] Queued prompt: "${userText}". OpenHands engine is analyzing dependencies and applying patches in sandbox.`,
         timestamp: "Just now",
         taskStatus: "running",
         actionDiff: {
@@ -123,7 +135,7 @@ export function CopilotChatPanel({
   return (
     <aside className="w-[400px] lg:w-[460px] border-l border-[#1E293B] glass-panel flex flex-col shrink-0 h-full shadow-[-8px_0_24px_rgba(0,0,0,0.5)]">
       {/* Copilot Header */}
-      <div className="p-3.5 border-b border-[#1E293B] bg-[#0B1018]/90 backdrop-blur-md flex items-center justify-between">
+      <div className="p-3 border-b border-[#1E293B] bg-[#0B1018]/90 backdrop-blur-md flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-[#00E5FF]/10 border border-[#00E5FF]/30 flex items-center justify-center">
             <Bot className="w-4 h-4 text-[#00E5FF]" />
@@ -135,10 +147,47 @@ export function CopilotChatPanel({
                 AI Agent
               </span>
             </h2>
-            <p className="text-[11px] text-[#64748B] flex items-center gap-1">
-              <span className="pulse-dot mr-0.5" />
-              OpenHands Cloud &bull; Claude 3.7 / DeepSeek
-            </p>
+            {/* Interactive Model Switcher Button */}
+            <div className="relative">
+              <button
+                onClick={() => setShowModelDropdown((prev) => !prev)}
+                className="text-[11px] text-[#00E5FF] hover:text-[#00E5FF]/80 flex items-center gap-1 font-mono transition-colors"
+              >
+                <span className="pulse-dot mr-0.5" />
+                <span>{activeModelObj.name}</span>
+                <ChevronDown className="w-3 h-3 text-[#64748B]" />
+              </button>
+
+              {showModelDropdown && (
+                <div className="absolute left-0 top-6 z-50 w-64 bg-[#0B1018] border border-[#1E293B] rounded-xl shadow-2xl p-1.5 space-y-1">
+                  <div className="px-2 py-1 text-[10px] font-mono text-[#64748B] uppercase tracking-wider">
+                    Select OpenRouter Model
+                  </div>
+                  {OPENROUTER_MODELS.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setSelectedModel(m.id);
+                        setShowModelDropdown(false);
+                      }}
+                      className={`w-full text-left p-2 rounded-lg flex items-center justify-between text-xs transition-colors ${
+                        selectedModel === m.id
+                          ? "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30"
+                          : "hover:bg-[#1E293B]/50 text-[#CBD5E1]"
+                      }`}
+                    >
+                      <div>
+                        <div className="font-semibold">{m.name}</div>
+                        <div className="text-[10px] text-[#64748B]">{m.tag}</div>
+                      </div>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1E293B] font-mono text-[#94A3B8]">
+                        {m.badge}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

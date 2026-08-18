@@ -16,6 +16,7 @@ import {
   GitBranch,
   Plus,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import React from "react";
@@ -55,13 +56,43 @@ export default async function DashboardOverviewPage({
         </div>
 
         <div className="flex items-center gap-2">
+          <Link href={`/${orgSlug}/workspaces/demo`}>
+            <Button size="sm" className="gap-1.5 shadow-sm bg-[#00E5FF] text-[#00363D] hover:bg-[#00E5FF]/90 font-semibold text-xs">
+              <Sparkles className="w-3.5 h-3.5" />
+              Open Copilot Chat
+            </Button>
+          </Link>
           <Link href={`/${orgSlug}/projects/new`}>
-            <Button size="sm" className="gap-1.5 shadow-xs">
+            <Button size="sm" variant="outline" className="gap-1.5 shadow-xs border-[#1E293B] text-xs">
               <Plus className="w-3.5 h-3.5" />
               Connect Repository
             </Button>
           </Link>
         </div>
+      </div>
+
+      {/* Interactive AI Copilot Prompt Launcher Banner */}
+      <div className="glass-panel p-5 rounded-2xl border border-[#00E5FF]/30 bg-gradient-to-r from-[#00E5FF]/10 via-[#0B1018] to-[#070A10] flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-[#00E5FF]/20 text-[#00E5FF] uppercase border border-[#00E5FF]/30">
+              AI Prompt Engine Ready
+            </span>
+            <span className="text-xs text-[#94A3B8] font-mono">Claude 3.7 &bull; DeepSeek R1 &bull; GPT-4o</span>
+          </div>
+          <h3 className="text-base font-bold text-white tracking-tight">
+            Write prompts, select models, and generate verified code repairs
+          </h3>
+          <p className="text-xs text-[#94A3B8] max-w-2xl leading-relaxed">
+            Open the 3-pane Cloud IDE to write natural-language prompts, inspect files, choose your OpenRouter AI model, and let OQVEN fix errors with deterministic sandbox validation.
+          </p>
+        </div>
+        <Link href={`/${orgSlug}/workspaces/demo`}>
+          <Button className="bg-[#00E5FF] text-[#00363D] hover:bg-[#00E5FF]/90 font-bold px-5 py-2 text-xs shadow-lg shadow-[#00E5FF]/20 gap-2 shrink-0">
+            <Sparkles className="w-4 h-4" />
+            Launch Copilot IDE &rarr;
+          </Button>
+        </Link>
       </div>
 
       {/* Metric Cards */}
