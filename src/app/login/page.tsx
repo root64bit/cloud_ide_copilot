@@ -31,13 +31,20 @@ export default function LoginPage() {
         router.replace("/");
         router.refresh();
       } else {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const redirectOrigin = typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || "https://cloud-ide-copilot.vercel.app";
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${redirectOrigin}/api/auth/callback`,
+          },
+        });
         if (error) throw error;
         if (data.session) {
           router.replace("/onboarding");
           router.refresh();
         } else {
-          setMessage("Account created. Confirm your email, then sign in.");
+          setMessage("Account created! Check your email to confirm and activate your account.");
           setMode("login");
         }
       }
