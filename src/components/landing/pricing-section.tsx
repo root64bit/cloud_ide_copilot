@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles, Zap } from "lucide-react";
+import { Check, Smartphone, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 import React, { useState } from "react";
 
@@ -15,6 +15,7 @@ export function PricingSection({ userOrgSlug }: { userOrgSlug?: string | null })
       badge: "Hobbyist",
       priceMonthly: 0,
       priceAnnual: 0,
+      priceMzn: 0,
       description: "Ideal for indie developers exploring autonomous AI debugging and code repair.",
       features: [
         "10 Autonomous AI repairs / mo",
@@ -27,12 +28,14 @@ export function PricingSection({ userOrgSlug }: { userOrgSlug?: string | null })
       ctaText: "Start Free",
       ctaHref: userOrgSlug ? `/${userOrgSlug}/workspaces` : "/onboarding",
       popular: false,
+      isMpesaAvailable: false,
     },
     {
       name: "Pro Engineer",
       badge: "Most Popular",
       priceMonthly: 29,
       priceAnnual: 24,
+      priceMzn: 1850,
       description: "For professional developers who want autonomous incident triage and fast sandbox repairs.",
       features: [
         "50 Autonomous AI repairs / mo",
@@ -44,15 +47,17 @@ export function PricingSection({ userOrgSlug }: { userOrgSlug?: string | null })
         "Vercel Preview deployment observation",
         "Priority worker queue execution",
       ],
-      ctaText: "Upgrade to Pro",
-      ctaHref: userOrgSlug ? `/${userOrgSlug}/settings` : "/onboarding",
+      ctaText: "Upgrade to Pro (M-Pesa / Card)",
+      ctaHref: "/checkout?plan=pro",
       popular: true,
+      isMpesaAvailable: true,
     },
     {
       name: "Team & Scale",
       badge: "Fast Teams",
       priceMonthly: 99,
       priceAnnual: 79,
+      priceMzn: 6300,
       description: "For engineering teams automating bug triage, release verification, and compliance.",
       features: [
         "Unlimited AI repairs & Copilot chat",
@@ -64,9 +69,10 @@ export function PricingSection({ userOrgSlug }: { userOrgSlug?: string | null })
         "Exact merge commit SHA release observer",
         "Priority Slack & email support",
       ],
-      ctaText: "Start Team Trial",
-      ctaHref: userOrgSlug ? `/${userOrgSlug}/settings` : "/onboarding",
+      ctaText: "Start Team Trial (M-Pesa / Card)",
+      ctaHref: "/checkout?plan=team",
       popular: false,
+      isMpesaAvailable: true,
     },
   ];
 
@@ -80,7 +86,7 @@ export function PricingSection({ userOrgSlug }: { userOrgSlug?: string | null })
           Predictable plans for high-velocity teams
         </h2>
         <p className="mt-4 text-[#94A3B8] text-sm sm:text-base">
-          Give OQVEN a task. Let isolated Sandboxes write and validate your code. Cancel or switch anytime.
+          Give OQVEN a task. Let isolated Sandboxes write and validate your code. Instant activation via Vodacom M-Pesa or Global Cards.
         </p>
 
         {/* Billing Cycle Toggle */}
@@ -142,7 +148,7 @@ export function PricingSection({ userOrgSlug }: { userOrgSlug?: string | null })
                   )}
                 </div>
 
-                <div className="flex items-baseline gap-1 mb-3">
+                <div className="flex items-baseline gap-1 mb-1">
                   <span className="text-4xl sm:text-5xl font-black text-white font-mono">
                     ${price}
                   </span>
@@ -150,6 +156,13 @@ export function PricingSection({ userOrgSlug }: { userOrgSlug?: string | null })
                     / user / month
                   </span>
                 </div>
+
+                {plan.priceMzn > 0 && (
+                  <div className="text-[11px] text-[#00E5FF] font-mono mb-3 flex items-center gap-1">
+                    <Smartphone className="w-3 h-3 text-[#22C55E]" />
+                    <span>M-Pesa: {plan.priceMzn.toLocaleString()} MZN</span>
+                  </div>
+                )}
 
                 <p className="text-xs text-[#94A3B8] leading-relaxed mb-6">
                   {plan.description}
@@ -177,8 +190,12 @@ export function PricingSection({ userOrgSlug }: { userOrgSlug?: string | null })
                   <Zap className="w-3.5 h-3.5" />
                   {plan.ctaText}
                 </Link>
-                <div className="text-center mt-2 text-[10px] text-[#64748B] font-mono">
-                  {plan.priceMonthly === 0 ? "No credit card required" : "Instant activation & setup"}
+                <div className="text-center mt-2 text-[10px] text-[#64748B] font-mono flex items-center justify-center gap-2">
+                  {plan.isMpesaAvailable ? (
+                    <span className="text-[#22C55E]">🇲🇿 Vodacom M-Pesa Push Accepted</span>
+                  ) : (
+                    <span>No credit card required</span>
+                  )}
                 </div>
               </div>
             </div>
