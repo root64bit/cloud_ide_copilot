@@ -43,9 +43,14 @@ export default async function DashboardOverviewPage({
       {/* Top Banner / Metrics */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-foreground tracking-tight">Engineering Overview</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Production monitoring, isolated repair sandboxes, and automated validation.
+          <div className="flex items-center gap-2 mb-1">
+            <h2 className="text-xl font-bold text-foreground tracking-tight">Engineering Overview</h2>
+            <Badge variant="outline" className="text-[10px] font-mono text-[#00E5FF] border-[#00E5FF]/30 bg-[#00E5FF]/10">
+              Free Starter Tier
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            10 AI repairs & 5h sandbox compute included &bull; <Link href="/checkout?plan=pro" className="text-[#00E5FF] hover:underline">Upgrade to Pro for 50 repairs &rarr;</Link>
           </p>
         </div>
 

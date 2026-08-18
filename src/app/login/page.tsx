@@ -28,7 +28,19 @@ export default function LoginPage() {
       if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        router.replace("/");
+
+        // Redirect directly to dashboard or onboarding
+        try {
+          const res = await fetch("/api/organizations");
+          const orgData = await res.json();
+          if (orgData.organizations && orgData.organizations.length > 0) {
+            router.replace(`/${orgData.organizations[0].slug}`);
+          } else {
+            router.replace("/onboarding");
+          }
+        } catch {
+          router.replace("/onboarding");
+        }
         router.refresh();
       } else {
         const redirectOrigin = typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || "https://cloud-ide-copilot.vercel.app";
@@ -80,7 +92,7 @@ export default function LoginPage() {
             {error && <p className="text-xs text-[#EF4444]">{error}</p>}
             {message && <p className="text-xs text-[#22C55E]">{message}</p>}
             <Button className="w-full bg-[#00E5FF] text-[#00363D] hover:bg-[#00E5FF]/90 font-bold" type="submit" isLoading={loading}>
-              {mode === "login" ? "Sign In" : "Create Account"}
+              {mode === "login" ? "Sign In to Dashboard" : "Create Account"}
             </Button>
           </form>
           <button className="mt-4 text-xs text-[#94A3B8] hover:text-[#00E5FF] transition-colors" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
