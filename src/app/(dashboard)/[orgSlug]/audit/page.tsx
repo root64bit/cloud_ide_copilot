@@ -1,27 +1,12 @@
 import { AuditEventList } from "@/components/audit/audit-event-list";
 import { AuditLogger } from "@/lib/audit/logger";
-import React from "react";
+import { getTenantPageContext } from "@/server/tenant/context";
 
-export default async function AuditTrailPage({
-  params,
-}: {
-  params: Promise<{ orgSlug: string }>;
-}) {
+export const dynamic = "force-dynamic";
+
+export default async function AuditTrailPage({ params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
-  const orgId = "00000000-0000-0000-0000-000000000001";
-
-  const events = await AuditLogger.getEvents(orgId, 50);
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold tracking-tight">Security Audit Trail</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Immutable event stream capturing all workspace creation, commands, AI repairs, PRs, and human approvals.
-        </p>
-      </div>
-
-      <AuditEventList events={events} />
-    </div>
-  );
+  const { tenant } = await getTenantPageContext(orgSlug);
+  const events = await AuditLogger.getEvents(tenant.organizationId, 100);
+  return <div className="space-y-6"><div><h2 className="text-xl font-bold tracking-tight">Security Audit Trail</h2><p className="text-xs text-muted-foreground mt-0.5">Persisted organization-scoped events for privileged engineering operations.</p></div><AuditEventList events={events} /></div>;
 }

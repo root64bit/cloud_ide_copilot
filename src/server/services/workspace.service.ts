@@ -15,6 +15,7 @@ export interface CreateWorkspaceInput {
   incidentId?: string;
   baseCommitSha?: string;
   ttlMinutes?: number;
+  installationToken?: string;
 }
 
 export class WorkspaceService {
@@ -26,9 +27,19 @@ export class WorkspaceService {
     await AuthGuard.assertPermission(userId, input.organizationId, "workspace:create");
     const project = await ProjectService.getProject(userId, input.organizationId, input.projectId);
 
-    const baseCommitSha = input.baseCommitSha || "a9f82d1c5e4b7890123456789abcdef012345678";
+    const baseCommitSha = input.baseCommitSha || (process.env.NODE_ENV === "test"
+      ? "a9f82d1c5e4b7890123456789abcdef012345678"
+      : undefined);
+    if (!baseCommitSha) {
+      throw new Error("baseCommitSha must be resolved from the connected Git provider before workspace creation");
+    }
     const repairBranch = generateRepairBranchName(project.slug, input.incidentId ? "fix" : "dev");
-    const expiresAt = new Date(Date.now() + (input.ttlMinutes || 60) * 60000).toISOString();
+    const requestedTtl = Number(input.ttlMinutes ?? 60);
+    if (!Number.isFinite(requestedTtl)) {
+      throw new Error("Workspace TTL must be a finite number of minutes");
+    }
+    const ttlMinutes = Math.min(Math.max(Math.trunc(requestedTtl), 5), 24 * 60);
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60_000).toISOString();
 
     // 1. Create sandbox instance
     const sandboxInstance = await sandboxProvider.createSandbox({
@@ -36,7 +47,9 @@ export class WorkspaceService {
       repoOwner: project.repository_owner,
       repoName: project.repository_name,
       commitSha: baseCommitSha,
-      ttlMinutes: input.ttlMinutes,
+      branch: project.default_branch,
+      installationToken: input.installationToken,
+      ttlMinutes,
     });
 
     const workspace = await WorkspaceRepo.create({

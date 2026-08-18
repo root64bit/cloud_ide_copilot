@@ -1,120 +1,51 @@
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Bot, CheckCircle2, Cpu, Github, Key, Server, Shield, Sparkles } from "lucide-react";
-import React from "react";
+import { ProjectIntegrationRepo, ProjectRepo } from "@/lib/supabase/repositories";
+import { getTenantPageContext } from "@/server/tenant/context";
+import { Bot, Cpu, Github, Server, ShieldCheck } from "lucide-react";
 
-export default async function SettingsPage({
-  params,
-}: {
-  params: Promise<{ orgSlug: string }>;
-}) {
+export const dynamic = "force-dynamic";
+
+function configured(value?: string) {
+  return Boolean(value && value.trim());
+}
+
+export default async function SettingsPage({ params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
+  const { tenant } = await getTenantPageContext(orgSlug);
+  const projects = await ProjectRepo.listByOrg(tenant.organizationId);
+  const integrationPairs = await Promise.all(projects.map(async (project: any) => ({
+    project,
+    github: await ProjectIntegrationRepo.findByProjectAndProvider(project.id, "github"),
+    sentry: await ProjectIntegrationRepo.findByProjectAndProvider(project.id, "sentry"),
+  })));
+
+  const githubProjectCount = integrationPairs.filter((row) => row.github).length;
+  const sentryProjectCount = integrationPairs.filter((row) => row.sentry).length;
+  const openRouterReady = configured(process.env.OPENROUTER_API_KEY);
+  const openHandsReady = configured(process.env.OPENHANDS_API_KEY) && configured(process.env.OPENHANDS_API_URL);
+  const triggerReady = configured(process.env.TRIGGER_SECRET_KEY);
+  const vercelDiscoveryReady = configured(process.env.VERCEL_TOKEN || process.env.VERCEL_API_TOKEN);
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div>
-        <h2 className="text-xl font-bold tracking-tight">Organization Settings & Integrations</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Manage API keys, connected developer tools, and LLM gateway configurations.
-        </p>
-      </div>
+      <div><h2 className="text-xl font-bold tracking-tight">Organization Settings & Integrations</h2><p className="text-xs text-muted-foreground mt-0.5">Truthful readiness status only. Secrets remain server-side and are never displayed here.</p></div>
 
-      {/* GitHub App */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Github className="w-4 h-4 text-foreground" /> GitHub App Integration
-            </CardTitle>
-            <Badge variant="success" className="gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Connected
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3 text-xs">
-          <p className="text-muted-foreground">
-            GitHub App provides short-lived installation access tokens for repository inspection and automated repair PRs.
-          </p>
-          <div className="p-2.5 rounded bg-secondary/30 font-mono text-[11px] text-muted-foreground">
-            App ID: 123456 | Permissions: Contents (Read), Pull Requests (Write)
-          </div>
+      <Card><CardHeader className="pb-3"><div className="flex items-center justify-between"><CardTitle className="text-sm font-bold flex items-center gap-2"><Github className="w-4 h-4" />GitHub App</CardTitle><Badge variant={githubProjectCount > 0 ? "success" : "outline"}>{githubProjectCount > 0 ? `${githubProjectCount} project(s)` : "No project connected"}</Badge></div></CardHeader><CardContent className="text-xs text-muted-foreground">GitHub installation access is stored per connected project. The application uses short-lived installation tokens for repository operations.</CardContent></Card>
+
+      <Card><CardHeader className="pb-3"><div className="flex items-center justify-between"><CardTitle className="text-sm font-bold flex items-center gap-2"><Server className="w-4 h-4" />Vercel</CardTitle><Badge variant={vercelDiscoveryReady ? "success" : "outline"}>{vercelDiscoveryReady ? "Deployment discovery configured" : "Deployment token not configured"}</Badge></div></CardHeader><CardContent className="text-xs text-muted-foreground">Vercel-hosted Sandbox calls use deployment identity/OIDC where available. Vercel deployment discovery currently uses the configured platform token/team for the MVP.</CardContent></Card>
+
+      <Card><CardHeader className="pb-3"><div className="flex items-center justify-between"><CardTitle className="text-sm font-bold flex items-center gap-2"><Bot className="w-4 h-4 text-primary" />AI Runtime</CardTitle><Badge variant={openRouterReady && openHandsReady && triggerReady ? "success" : "warning"}>{openRouterReady && openHandsReady && triggerReady ? "Core AI configured" : "Configuration incomplete"}</Badge></div></CardHeader>
+        <CardContent className="grid sm:grid-cols-3 gap-3 text-xs">
+          <div className="p-2.5 rounded bg-secondary/30"><span className="block text-[10px] text-muted-foreground">OpenRouter</span><span className="font-semibold">{openRouterReady ? "Configured" : "Missing key"}</span></div>
+          <div className="p-2.5 rounded bg-secondary/30"><span className="block text-[10px] text-muted-foreground">OpenHands Cloud</span><span className="font-semibold">{openHandsReady ? "Configured" : "Incomplete"}</span></div>
+          <div className="p-2.5 rounded bg-secondary/30"><span className="block text-[10px] text-muted-foreground">Trigger.dev</span><span className="font-semibold">{triggerReady ? "Configured" : "Missing key"}</span></div>
         </CardContent>
       </Card>
 
-      {/* Vercel */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Server className="w-4 h-4 text-foreground" /> Vercel Deployment & Sandboxes
-            </CardTitle>
-            <Badge variant="success" className="gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Active
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3 text-xs">
-          <p className="text-muted-foreground">
-            Connects production deployment status and spins up @vercel/sandbox environments for isolated testing.
-          </p>
-          <div className="p-2.5 rounded bg-secondary/30 font-mono text-[11px] text-muted-foreground">
-            Team: team_acme | Sandbox Execution: Enabled
-          </div>
-        </CardContent>
-      </Card>
+      <Card><CardHeader className="pb-3"><div className="flex items-center justify-between"><CardTitle className="text-sm font-bold flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-400" />Sentry Mapping</CardTitle><Badge variant={sentryProjectCount > 0 ? "success" : "outline"}>{sentryProjectCount} mapped</Badge></div></CardHeader><CardContent className="text-xs text-muted-foreground">Incoming Sentry webhooks fail closed unless their project identifier maps to a connected platform project.</CardContent></Card>
 
-      {/* OpenRouter LLM */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Bot className="w-4 h-4 text-primary" /> OpenRouter LLM Gateway
-            </CardTitle>
-            <Badge variant="success" className="gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Configured
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3 text-xs">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-2.5 rounded bg-secondary/30">
-              <span className="text-[10px] text-muted-foreground block">Analysis Model</span>
-              <span className="font-mono text-foreground font-semibold">anthropic/claude-3.5-sonnet</span>
-            </div>
-            <div className="p-2.5 rounded bg-secondary/30">
-              <span className="text-[10px] text-muted-foreground block">Coding Agent Model</span>
-              <span className="font-mono text-foreground font-semibold">anthropic/claude-3.5-sonnet</span>
-            </div>
-            <div className="p-2.5 rounded bg-secondary/30">
-              <span className="text-[10px] text-muted-foreground block">Review Model</span>
-              <span className="font-mono text-foreground font-semibold">openai/gpt-4o</span>
-            </div>
-            <div className="p-2.5 rounded bg-secondary/30">
-              <span className="text-[10px] text-muted-foreground block">Fast / Triage Model</span>
-              <span className="font-mono text-foreground font-semibold">openai/gpt-4o-mini</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Agent Memory (TencentDB Phase 2) */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-amber-400" /> Project Memory (TencentDB Agent Memory)
-            </CardTitle>
-            <Badge variant="outline">Phase 2 Ready</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2 text-xs">
-          <p className="text-muted-foreground">
-            Scoped organization & project memory storing architecture context, coding conventions, and past bugfix patterns.
-          </p>
-        </CardContent>
-      </Card>
+      <Card><CardHeader className="pb-3"><CardTitle className="text-sm font-bold flex items-center gap-2"><Cpu className="w-4 h-4 text-amber-400" />Project Memory</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">TencentDB Agent Memory remains deliberately deferred until the core repair/release path is fully proven.</CardContent></Card>
     </div>
   );
 }

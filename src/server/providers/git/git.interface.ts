@@ -44,6 +44,7 @@ export interface GitProvider {
   listRepositories(installationId: number): Promise<GitRepository[]>;
   getRepository(owner: string, repo: string, installationId?: number): Promise<GitRepository>;
   getLatestCommit(owner: string, repo: string, branch?: string, installationId?: number): Promise<GitCommit>;
+  getInstallationAccessToken?(installationId: number): Promise<string>;
   createBranch(options: CreateBranchOptions, installationId?: number): Promise<{ ref: string; sha: string }>;
   createPullRequest(options: CreatePullRequestOptions, installationId?: number): Promise<PullRequestResult>;
   mergePullRequest(owner: string, repo: string, prNumber: number, installationId?: number): Promise<{ merged: boolean; sha: string }>;

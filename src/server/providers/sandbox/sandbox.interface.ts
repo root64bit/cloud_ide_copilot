@@ -13,14 +13,27 @@ export interface SandboxInstance {
   expiresAt: string;
 }
 
+export interface SandboxCreateOptions {
+  name: string;
+  repoOwner: string;
+  repoName: string;
+  commitSha: string;
+  branch?: string;
+  installationToken?: string;
+  ttlMinutes?: number;
+}
+
+export interface PushRepairBranchOptions {
+  repoOwner: string;
+  repoName: string;
+  branch: string;
+  baseBranch: string;
+  installationToken: string;
+  commitMessage: string;
+}
+
 export interface SandboxProvider {
-  createSandbox(options: {
-    name: string;
-    repoOwner: string;
-    repoName: string;
-    commitSha: string;
-    ttlMinutes?: number;
-  }): Promise<SandboxInstance>;
+  createSandbox(options: SandboxCreateOptions): Promise<SandboxInstance>;
 
   executeCommand(
     sandboxId: string,
@@ -31,6 +44,10 @@ export interface SandboxProvider {
 
   readFile(sandboxId: string, filePath: string): Promise<string>;
   writeFile(sandboxId: string, filePath: string, content: string): Promise<void>;
+  pushRepairBranch?(
+    sandboxId: string,
+    options: PushRepairBranchOptions
+  ): Promise<{ commitSha: string; branch: string }>;
   stopSandbox(sandboxId: string): Promise<void>;
   getBrowserIdeUrl(sandboxId: string): Promise<string>;
 }

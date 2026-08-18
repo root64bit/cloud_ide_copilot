@@ -1,15 +1,17 @@
 import { task } from "@trigger.dev/sdk";
 
 /**
- * Cleanup orchestration boundary. It is deliberately NOT scheduled yet because workspace
- * persistence and real sandbox deletion are not wired end-to-end. Scheduling a no-op would
- * waste compute and could hide leaked sandboxes.
+ * Reserved cleanup scheduler.
+ *
+ * Real workspace persistence and sandbox stop operations exist, but an
+ * authenticated machine-actor policy for scheduled cleanup has not yet been
+ * defined. Failing closed prevents silent leaked-sandbox claims.
  */
 export const workspaceCleanupTask = task({
   id: "workspace-cleanup",
   run: async () => {
     throw new Error(
-      "WORKSPACE_CLEANUP_NOT_WIRED: enable persistent Supabase workspace storage and the real sandbox provider before scheduling cleanup."
+      "WORKSPACE_CLEANUP_MACHINE_ACTOR_NOT_CONFIGURED: define the scheduled cleanup actor/authorization policy before enabling this task."
     );
   },
 });

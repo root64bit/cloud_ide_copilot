@@ -1,3 +1,4 @@
+import { redactSecrets } from "@/lib/security/redaction";
 import type { RepairPlan } from "../ai/ai.interface";
 import type {
   CodingAgent,
@@ -34,6 +35,20 @@ function normalizeChangedFiles(payload: unknown): string[] {
   return [];
 }
 
+
+function assertSafeAgentChanges(modifiedFiles: string[], diff: string): void {
+  const sensitiveFiles = modifiedFiles.filter((file) =>
+    /(^|\/)(\.env($|\.)|.*\.(pem|key|p12|pfx)$|credentials.*\.json$|service-account.*\.json$)/i.test(file)
+  );
+  if (sensitiveFiles.length > 0) {
+    throw new Error(`OpenHands attempted to modify sensitive files: ${sensitiveFiles.join(", ")}`);
+  }
+
+  if (diff && redactSecrets(diff) !== diff) {
+    throw new Error("OpenHands diff contains data matching a secret pattern; repair artifact was rejected before persistence");
+  }
+}
+
 function buildRepairPrompt(context: CodingAgentTaskContext) {
   const diagnosis = context.diagnosis;
   const additional = context.instructions ? `\nAdditional operator instructions:\n${context.instructions}\n` : "";
@@ -41,6 +56,7 @@ function buildRepairPrompt(context: CodingAgentTaskContext) {
   return `You are operating as the coding agent for a controlled production-repair workflow.
 
 Repository: ${context.repoOwner}/${context.repoName}
+Base commit authority: ${context.baseCommitSha || "not supplied"}
 Incident: ${context.incidentTitle}
 Probable root cause: ${diagnosis.probableRootCause}
 Confidence: ${diagnosis.confidence}
@@ -51,14 +67,15 @@ Recommended tests: ${diagnosis.recommendedTests.join("; ") || "none supplied"}
 ${additional}
 MANDATORY SAFETY RULES:
 1. Inspect the repository before editing.
-2. Make the smallest correct repair for this incident.
-3. Add or update focused tests where appropriate.
-4. You MAY run repository tests or static checks to understand your change.
-5. DO NOT commit, push, create a pull request, merge, or deploy.
-6. DO NOT modify CI/CD secrets, environment files, private keys, deployment credentials, or production data.
-7. Leave all source changes UNCOMMITTED in the OpenHands working tree so this platform can inspect the real git diff.
-8. Do not claim a test passed unless you actually ran it and saw a successful result.
-9. If the repair is unsafe or information is missing, stop without making speculative changes.
+2. If a base commit authority is supplied, verify git rev-parse HEAD and checkout that exact commit in detached HEAD before making any edit. If the commit cannot be checked out, stop without changes.
+3. Make the smallest correct repair for this incident.
+4. Add or update focused tests where appropriate.
+5. You MAY run repository tests or static checks to understand your change.
+6. DO NOT commit, push, create a pull request, merge, or deploy.
+7. DO NOT modify CI/CD secrets, environment files, private keys, deployment credentials, or production data.
+8. Leave all source changes UNCOMMITTED in the OpenHands working tree so this platform can inspect the real git diff.
+9. Do not claim a test passed unless you actually ran it and saw a successful result.
+10. If the repair is unsafe or information is missing, stop without making speculative changes.
 
 Finish only after the working tree contains the proposed source/test changes or after determining that no safe repair can be made.`;
 }
@@ -112,6 +129,8 @@ export class OpenHandsAgentProvider implements CodingAgent {
       modifiedFiles = [...combinedDiff.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((match) => match[1]);
     }
 
+    assertSafeAgentChanges(modifiedFiles, combinedDiff);
+
     const patchApplied = modifiedFiles.length > 0 || combinedDiff.trim().length > 0;
     const repairPlan: RepairPlan = {
       title: patchApplied ? `OpenHands repair for ${context.incidentTitle}` : "OpenHands completed without source changes",
@@ -158,6 +177,9 @@ export class OpenHandsAgentProvider implements CodingAgent {
       diffs.push(await this.client.getFileDiff(conversationId, absolutePath));
     }
 
+    const combinedDiff = diffs.join("\n\n");
+    assertSafeAgentChanges(modifiedFiles, combinedDiff);
+
     const repairPlan: RepairPlan = {
       title: "OpenHands follow-up repair",
       description: instruction,
@@ -174,7 +196,7 @@ export class OpenHandsAgentProvider implements CodingAgent {
     return {
       patchApplied: modifiedFiles.length > 0,
       modifiedFiles,
-      diff: diffs.join("\n\n"),
+      diff: combinedDiff,
       summary: instruction,
       repairPlan,
       provider: "openhands",

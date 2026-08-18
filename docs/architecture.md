@@ -1,97 +1,96 @@
 # System Architecture
 
-Cloud IDE Copilot is being built as a multi-tenant AI engineering control plane for production incident handling, coding-agent repair, deterministic validation, Git/Vercel preview workflows, and explicit human production approval.
+Cloud IDE Copilot is a multi-tenant AI engineering control plane for incident handling, isolated code repair, deterministic validation, Git/Vercel previews, and explicit human production approval.
 
-This document distinguishes the **target architecture** from the **current implementation**.
-
-## Target architecture
+## Current real repair path
 
 ```text
-Web / Mobile client
-        |
-        v
+Web / mobile client
+      |
+      v
 Next.js control plane on Vercel
-        |
-        +-- Supabase Auth + PostgreSQL tenant/RBAC authority
-        +-- GitHub App
-        +-- Sentry
-        +-- OpenRouter
-        |
-        v
-Trigger.dev durable workflow
-        |
-        v
+      |
+      +-- Supabase Auth + PostgreSQL tenant/RBAC authority
+      +-- GitHub App
+      +-- Sentry
+      +-- OpenRouter
+      |
+      v
+Trigger.dev durable OpenHands job
+      |
+      v
 OpenHands Cloud coding agent
-        |
-     real Git diff
-        |
-        v
-Vercel Sandbox deterministic validation
-  install / test / lint / typecheck / build
-        |
-        v
-GitHub repair branch + PR
-        |
-        v
-Vercel Preview
-        |
- deterministic + browser + AI audit gates
-        |
-        v
+      |
+   real Git diff
+      |
+      v
+Supabase repair artifact
+      |
+      v
+Vercel-hosted control plane
+      |
+      v
+Vercel Sandbox exact-commit clone
+      |
+ git apply --check + patch
+      |
+      v
+install / test / lint / typecheck / build
+      |
+      v
+GitHub App ai-repair branch + PR
+      |
+      v
+real Vercel Preview
+      |
+      v
 explicit authorized human approval
-        |
-        v
-production branch / Vercel Production
+      |
+      v
+GitHub merge SHA
+      |
+      v
+exact READY Vercel Production deployment
 ```
 
-## Current real boundaries
-
-### OpenHands
-
-`OpenHandsAgentProvider` now calls the real OpenHands Cloud V1 API. It starts a repository conversation, waits for agent execution, and retrieves real Git changes/diffs. It is not allowed to commit, push, open PRs, merge, or deploy.
-
-### Trigger.dev
-
-Real tasks currently wired:
+## Authority model
 
 ```text
-engineering-health-check
-openhands-repair
+OpenHands = coding/reasoning authority inside an isolated working copy
+Vercel Sandbox = deterministic command/test/build authority
+GitHub/Vercel observations = release/deployment evidence
+Human owner/admin = production approval authority
 ```
 
-The validation, workspace lifecycle, Sentry orchestration, and cleanup tasks intentionally fail closed until the backing persistence/sandbox operations are real.
+AI has no direct merge/deploy permission in the workflow.
 
-### OpenRouter
+## Provider boundaries
 
-OpenRouter is the LLM gateway for structured incident diagnosis/review in the Vercel control plane. In non-test environments, missing credentials now produce a configuration error instead of a fabricated result.
+### Supabase
 
-## Current blockers
+Runtime repositories use Supabase outside tests/explicit non-production mock mode. Server-side Auth and organization membership are resolved before privileged operations.
 
-### Persistence/authentication
+### OpenHands + Trigger.dev
 
-The SQL schema and RLS policies exist, but current server services/RBAC/pages still use `InMemoryDatabase` in many paths. This means the database is not yet the runtime multi-tenant authority.
+`openhands-repair` is a real Trigger.dev task. It invokes OpenHands Cloud and persists the real repair artifact. It does not control production or Git shipping.
 
 ### Vercel Sandbox
 
-The provider interface exists, but the current `VercelSandboxProvider` is simulated. A real `@vercel/sandbox` implementation is the next major infrastructure task.
+`VercelSandboxProvider` uses `@vercel/sandbox` for isolated clone/command/file/patch/stop operations. Sandbox creation/validation currently runs from the Vercel-hosted control plane to use the platform's Vercel execution identity. The reserved external Trigger lifecycle/validation tasks fail closed until explicit external Vercel credentials/machine policy are configured.
 
-### Git shipping
+### GitHub
 
-The GitHub App provider exists, but the PR/approval API routes still instantiate a mock Git provider and do not yet push the validated OpenHands change set.
+GitHub App installation tokens provide short-lived repository credentials. Repair changes are pushed only to protected `ai-repair/*` branches. PR merge occurs only after the explicit production-approval gate.
 
-### Browser IDE
+### Vercel release evidence
 
-The code-server concept/UI is not yet backed by a proven isolated workspace.
+Preview readiness is observed from Vercel. After human merge, the canonical GitHub merge SHA is stored and the workspace is marked `completed` only after a Vercel production deployment with that exact SHA is READY.
 
-## Required authority model
+## Remaining architecture gates
 
-The intended hierarchy is:
-
-```text
-AI coding agent = proposes/modifies isolated source
-Vercel Sandbox = deterministic test/build authority
-Audit engine = release evidence / gates
-Human = production approval authority
-```
-
-No AI/provider should be able to skip the release gate and write directly to production.
+- Public-SaaS-safe GitHub installation binding using GitHub user authorization/OAuth.
+- Customer-specific Vercel Integration/OAuth installation.
+- Browser IDE/code-server authenticated to the isolated workspace.
+- Triple Audit engine and multi-model release review.
+- Scheduled workspace cleanup machine policy.
+- Usage metering/M-Pesa billing.

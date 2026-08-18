@@ -44,11 +44,6 @@ export function PrApprovalView({
   const [approvalNotes, setApprovalNotes] = useState("");
   const [confirmedSafe, setConfirmedSafe] = useState(false);
 
-  const canCreatePr =
-    workspaceStatus === "ready_for_review" ||
-    workspaceStatus === "validating" ||
-    workspaceStatus === "repairing";
-
   const isPreviewReady =
     workspaceStatus === "preview_ready" ||
     workspaceStatus === "approved" ||
@@ -56,6 +51,7 @@ export function PrApprovalView({
     workspaceStatus === "completed";
 
   const isMerged = workspaceStatus === "merged" || workspaceStatus === "completed";
+  const productionObserved = workspaceStatus === "completed";
 
   return (
     <Card className="border-border">
@@ -86,7 +82,7 @@ export function PrApprovalView({
               size="sm"
               onClick={onCreatePr}
               isLoading={isCreatingPr}
-              disabled={Boolean(blockedReason) || isCreatingPr || workspaceStatus === "stopped"}
+              disabled={Boolean(blockedReason) || isCreatingPr || workspaceStatus !== "ready_for_review"}
               className="gap-1.5"
             >
               <GitPullRequest className="w-3.5 h-3.5" />
@@ -166,9 +162,13 @@ export function PrApprovalView({
             Production merges and live deployments are protected. AI agents cannot merge or deploy to production autonomously.
           </p>
 
-          {isMerged ? (
-            <Alert variant="success" title="Production Deployed">
-              This repair has been approved by a human owner, merged to main, and deployed to production via Vercel.
+          {productionObserved ? (
+            <Alert variant="success" title="Production Deployment Observed">
+              The human-approved merge commit has been observed in a READY Vercel production deployment.
+            </Alert>
+          ) : workspaceStatus === "merged" ? (
+            <Alert variant="warning" title="Merged — waiting for production evidence">
+              GitHub merge completed. The workspace will remain open until Vercel reports a READY production deployment for the exact merge commit.
             </Alert>
           ) : (
             <div className="space-y-3 pt-2">
@@ -198,7 +198,7 @@ export function PrApprovalView({
                 size="sm"
                 onClick={() => onApproveAndMerge(approvalNotes)}
                 isLoading={isApproving}
-                disabled={Boolean(blockedReason) || !confirmedSafe || !pullRequest || isApproving || isMerged}
+                disabled={Boolean(blockedReason) || !confirmedSafe || !pullRequest || isApproving || isMerged || !isPreviewReady}
                 className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 <ShieldCheck className="w-4 h-4" />

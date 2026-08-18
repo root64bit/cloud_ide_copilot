@@ -201,6 +201,38 @@ export interface Database {
           updated_at?: string;
         };
       };
+      project_integrations: {
+        Row: {
+          id: string;
+          project_id: string;
+          provider: "github" | "vercel" | "sentry" | "openrouter" | "openhands";
+          external_id: string;
+          config_encrypted: Json;
+          status: "connected" | "disconnected" | "error";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          provider: "github" | "vercel" | "sentry" | "openrouter" | "openhands";
+          external_id: string;
+          config_encrypted?: Json;
+          status?: "connected" | "disconnected" | "error";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          provider?: "github" | "vercel" | "sentry" | "openrouter" | "openhands";
+          external_id?: string;
+          config_encrypted?: Json;
+          status?: "connected" | "disconnected" | "error";
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       incidents: {
         Row: {
           id: string;
@@ -410,6 +442,7 @@ export interface Database {
           created_at: string;
           merged_at: string | null;
           merged_by: string | null;
+          merge_commit_sha: string | null;
         };
         Insert: {
           id?: string;
@@ -425,6 +458,7 @@ export interface Database {
           created_at?: string;
           merged_at?: string | null;
           merged_by?: string | null;
+          merge_commit_sha?: string | null;
         };
         Update: {
           id?: string;
@@ -440,6 +474,7 @@ export interface Database {
           created_at?: string;
           merged_at?: string | null;
           merged_by?: string | null;
+          merge_commit_sha?: string | null;
         };
       };
       deployments: {

@@ -1,90 +1,74 @@
 import type { DeploymentInfo, DeploymentProvider } from "./deployment.interface";
 
+function isMockMode(): boolean {
+  return process.env.NODE_ENV === "test" || (process.env.NODE_ENV !== "production" && process.env.ALLOW_MOCK_PROVIDERS === "true");
+}
+
 export class VercelDeploymentProvider implements DeploymentProvider {
-  private apiToken: string;
+  private apiToken: string | undefined;
   private defaultTeamId?: string;
 
   constructor() {
-    this.apiToken = process.env.VERCEL_API_TOKEN || "mock-vercel-token";
+    this.apiToken = process.env.VERCEL_TOKEN || process.env.VERCEL_API_TOKEN;
     this.defaultTeamId = process.env.VERCEL_TEAM_ID;
   }
 
+  private assertConfigured(): string {
+    if (isMockMode()) return "mock";
+    if (!this.apiToken) {
+      throw new Error("VERCEL_DEPLOYMENT_API_NOT_CONFIGURED: set VERCEL_TOKEN for deployment discovery");
+    }
+    return this.apiToken;
+  }
+
   private getHeaders(): HeadersInit {
-    return {
-      Authorization: `Bearer ${this.apiToken}`,
-      "Content-Type": "application/json",
-    };
+    const token = this.assertConfigured();
+    return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   }
 
-  async getProject(
-    projectId: string,
-    teamId?: string
-  ): Promise<{ id: string; name: string; domains: string[] }> {
+  async getProject(projectId: string, teamId?: string): Promise<{ id: string; name: string; domains: string[] }> {
+    if (isMockMode()) {
+      return { id: projectId, name: projectId.replace("prj_", ""), domains: [`${projectId.replace("prj_", "")}.example.com`] };
+    }
     const tid = teamId || this.defaultTeamId;
-    const url = `https://api.vercel.com/v9/projects/${projectId}${tid ? `?teamId=${tid}` : ""}`;
-
-    if (!process.env.VERCEL_API_TOKEN) {
-      // Mock fallback
-      return {
-        id: projectId,
-        name: projectId.replace("prj_", ""),
-        domains: [`${projectId.replace("prj_", "")}.example.com`],
-      };
-    }
-
-    const res = await fetch(url, { headers: this.getHeaders() });
-    if (!res.ok) {
-      throw new Error(`Failed to fetch Vercel project: ${res.statusText}`);
-    }
-    const data = await res.json();
-    return {
-      id: data.id,
-      name: data.name,
-      domains: data.targets?.production?.alias || [],
-    };
+    const params = new URLSearchParams();
+    if (tid) params.set("teamId", tid);
+    const url = `https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}${params.size ? `?${params}` : ""}`;
+    const res = await fetch(url, { headers: this.getHeaders(), cache: "no-store" });
+    if (!res.ok) throw new Error(`Failed to fetch Vercel project (${res.status})`);
+    const data: any = await res.json();
+    return { id: data.id, name: data.name, domains: data.targets?.production?.alias || [] };
   }
 
-  async getDeployments(
-    projectId: string,
-    limit = 10,
-    teamId?: string
-  ): Promise<DeploymentInfo[]> {
+  async getDeployments(projectId: string, limit = 10, teamId?: string): Promise<DeploymentInfo[]> {
+    if (isMockMode()) {
+      return [{
+        id: "dpl_mock_preview",
+        projectId,
+        name: "Mock Preview Deployment",
+        url: "https://mock-preview.vercel.app",
+        environment: "preview",
+        status: "ready",
+        branch: "ai-repair/mock-fix",
+        commitSha: "f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0",
+        createdAt: new Date().toISOString(),
+        readyAt: new Date().toISOString(),
+      }];
+    }
     const tid = teamId || this.defaultTeamId;
-    const url = `https://api.vercel.com/v6/deployments?projectId=${projectId}&limit=${limit}${
-      tid ? `&teamId=${tid}` : ""
-    }`;
-
-    if (!process.env.VERCEL_API_TOKEN) {
-      return [
-        {
-          id: "dpl_prod_98234",
-          projectId,
-          name: "Production Deployment",
-          url: `https://${projectId.replace("prj_", "")}.example.com`,
-          environment: "production",
-          status: "ready",
-          branch: "main",
-          commitSha: "a9f82d1c5e4b7890123456789abcdef012345678",
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-          readyAt: new Date(Date.now() - 3500000).toISOString(),
-        },
-      ];
-    }
-
-    const res = await fetch(url, { headers: this.getHeaders() });
-    if (!res.ok) {
-      throw new Error(`Failed to fetch Vercel deployments: ${res.statusText}`);
-    }
-    const data = await res.json();
-
+    const params = new URLSearchParams({ projectId, limit: String(Math.min(Math.max(limit, 1), 100)) });
+    if (tid) params.set("teamId", tid);
+    const res = await fetch(`https://api.vercel.com/v6/deployments?${params}`, { headers: this.getHeaders(), cache: "no-store" });
+    if (!res.ok) throw new Error(`Failed to fetch Vercel deployments (${res.status})`);
+    const data: any = await res.json();
     return (data.deployments || []).map((d: any) => ({
       id: d.uid,
       projectId,
       name: d.name,
-      url: `https://${d.url}`,
+      url: d.url ? `https://${d.url}` : "",
       environment: d.target === "production" ? "production" : "preview",
-      status: d.readyState === "READY" ? "ready" : d.readyState === "ERROR" ? "error" : "building",
-      branch: d.meta?.githubCommitRef || "main",
+      status: d.readyState === "READY" ? "ready" : d.readyState === "ERROR" ? "error" : d.readyState === "CANCELED" ? "canceled" : "building",
+      branch: d.meta?.githubCommitRef || "",
       commitSha: d.meta?.githubCommitSha || "",
       createdAt: new Date(d.createdAt).toISOString(),
       readyAt: d.ready ? new Date(d.ready).toISOString() : undefined,
@@ -92,40 +76,37 @@ export class VercelDeploymentProvider implements DeploymentProvider {
   }
 
   async getDeploymentStatus(deploymentId: string, teamId?: string): Promise<DeploymentInfo> {
-    const tid = teamId || this.defaultTeamId;
-    const url = `https://api.vercel.com/v13/deployments/${deploymentId}${
-      tid ? `?teamId=${tid}` : ""
-    }`;
-
-    if (!process.env.VERCEL_API_TOKEN) {
+    if (isMockMode()) {
       return {
         id: deploymentId,
-        projectId: "prj_onedealer",
-        name: "Preview Deployment",
-        url: `https://onedealer-preview-${deploymentId}.vercel.app`,
+        projectId: "mock-project",
+        name: "Mock Preview Deployment",
+        url: "https://mock-preview.vercel.app",
         environment: "preview",
         status: "ready",
-        branch: "ai-repair/onedealer-patch-1",
+        branch: "ai-repair/mock-fix",
         commitSha: "f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0",
-        createdAt: new Date(Date.now() - 120000).toISOString(),
-        readyAt: new Date(Date.now() - 60000).toISOString(),
+        createdAt: new Date().toISOString(),
+        readyAt: new Date().toISOString(),
       };
     }
-
-    const res = await fetch(url, { headers: this.getHeaders() });
-    if (!res.ok) {
-      throw new Error(`Failed to fetch deployment status: ${res.statusText}`);
-    }
-    const d = await res.json();
-
+    const tid = teamId || this.defaultTeamId;
+    const params = new URLSearchParams();
+    if (tid) params.set("teamId", tid);
+    const res = await fetch(`https://api.vercel.com/v13/deployments/${encodeURIComponent(deploymentId)}${params.size ? `?${params}` : ""}`, {
+      headers: this.getHeaders(),
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Failed to fetch Vercel deployment (${res.status})`);
+    const d: any = await res.json();
     return {
       id: d.id,
       projectId: d.projectId,
       name: d.name,
-      url: `https://${d.url}`,
+      url: d.url ? `https://${d.url}` : "",
       environment: d.target === "production" ? "production" : "preview",
-      status: d.readyState === "READY" ? "ready" : d.readyState === "ERROR" ? "error" : "building",
-      branch: d.meta?.githubCommitRef || "main",
+      status: d.readyState === "READY" ? "ready" : d.readyState === "ERROR" ? "error" : d.readyState === "CANCELED" ? "canceled" : "building",
+      branch: d.meta?.githubCommitRef || "",
       commitSha: d.meta?.githubCommitSha || "",
       createdAt: new Date(d.createdAt).toISOString(),
       readyAt: d.ready ? new Date(d.ready).toISOString() : undefined,
@@ -133,10 +114,8 @@ export class VercelDeploymentProvider implements DeploymentProvider {
   }
 
   async getPreviewUrl(projectId: string, branchName: string, teamId?: string): Promise<string | null> {
-    const deployments = await this.getDeployments(projectId, 10, teamId);
-    const match = deployments.find(
-      (d) => d.branch === branchName && (d.status === "ready" || d.status === "building")
-    );
-    return match ? match.url : null;
+    const deployments = await this.getDeployments(projectId, 25, teamId);
+    const match = deployments.find((d) => d.environment === "preview" && d.branch === branchName && (d.status === "ready" || d.status === "building"));
+    return match?.url || null;
   }
 }

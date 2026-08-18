@@ -1,6 +1,8 @@
 import { truncateOutput } from "@/lib/security/allowlist";
 import { redactSecrets } from "@/lib/security/redaction";
 import type {
+  PushRepairBranchOptions,
+  SandboxCreateOptions,
   SandboxExecutionResult,
   SandboxInstance,
   SandboxProvider,
@@ -17,13 +19,7 @@ export class MockSandboxProvider implements SandboxProvider {
     );
   }
 
-  async createSandbox(options: {
-    name: string;
-    repoOwner: string;
-    repoName: string;
-    commitSha: string;
-    ttlMinutes?: number;
-  }): Promise<SandboxInstance> {
+  async createSandbox(options: SandboxCreateOptions): Promise<SandboxInstance> {
     const sandboxId = `mock_sbx_${Date.now()}`;
     return {
       id: sandboxId,
@@ -34,14 +30,9 @@ export class MockSandboxProvider implements SandboxProvider {
     };
   }
 
-  async executeCommand(
-    _sandboxId: string,
-    command: string,
-    args: string[] = []
-  ): Promise<SandboxExecutionResult> {
+  async executeCommand(_sandboxId: string, command: string, args: string[] = []): Promise<SandboxExecutionResult> {
     const fullCmd = `${command} ${args.join(" ")}`.trim();
     this.executedCommands.push(fullCmd);
-
     return {
       exitCode: 0,
       stdout: truncateOutput(redactSecrets(`[MOCK SANDBOX] Success: ${fullCmd}`)),
@@ -58,9 +49,14 @@ export class MockSandboxProvider implements SandboxProvider {
     this.files.set(filePath, content);
   }
 
-  async stopSandbox(_sandboxId: string): Promise<void> {
-    // Stopped
+  async pushRepairBranch(_sandboxId: string, options: PushRepairBranchOptions) {
+    return {
+      commitSha: "f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0",
+      branch: options.branch,
+    };
   }
+
+  async stopSandbox(_sandboxId: string): Promise<void> {}
 
   async getBrowserIdeUrl(sandboxId: string): Promise<string> {
     return `https://ide.mock.example.com/?sandbox=${sandboxId}`;

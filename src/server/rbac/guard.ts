@@ -1,5 +1,5 @@
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
-import { InMemoryDatabase } from "@/lib/supabase/server";
+import { OrganizationMemberRepo } from "@/lib/supabase/repositories";
 import type { UserRole } from "@/lib/supabase/types";
 import { hasPermission, type Permission } from "./permissions";
 
@@ -10,9 +10,6 @@ export interface SessionContext {
 }
 
 export class AuthGuard {
-  /**
-   * Resolves member session within the context of an organization and enforces RBAC permission.
-   */
   public static async assertPermission(
     userId: string | undefined | null,
     organizationId: string,
@@ -22,31 +19,19 @@ export class AuthGuard {
       throw new UnauthorizedError("Authentication required to access organization resources");
     }
 
-    // Look up membership
-    const memberKey = `${organizationId}:${userId}`;
-    const member = InMemoryDatabase.getInstance().members.get(memberKey);
-
+    const member = await OrganizationMemberRepo.getMembership(organizationId, userId);
     if (!member) {
       throw new ForbiddenError("User is not a member of this organization");
     }
 
     const role = member.role as UserRole;
     if (!hasPermission(role, requiredPermission)) {
-      throw new ForbiddenError(
-        `Role '${role}' lacks required permission '${requiredPermission}'`
-      );
+      throw new ForbiddenError(`Role '${role}' lacks required permission '${requiredPermission}'`);
     }
 
-    return {
-      userId,
-      organizationId,
-      role,
-    };
+    return { userId, organizationId, role };
   }
 
-  /**
-   * Specifically validates production approval authorization (requires admin or owner).
-   */
   public static async assertProductionApproval(
     userId: string,
     organizationId: string

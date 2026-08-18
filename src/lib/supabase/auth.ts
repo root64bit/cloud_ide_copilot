@@ -1,11 +1,11 @@
-import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
-import { OrganizationMemberRepo, OrganizationRepo } from "./repositories";
+import { ForbiddenError, NotFoundError, UnauthorizedError } from "@/lib/errors";
+import { OrganizationMemberRepo, OrganizationRepo, WorkspaceRepo } from "./repositories";
+import { createAdminClient, createServerAuthClient } from "./server";
 import type { UserRole } from "./types";
 
 export interface AuthenticatedUser {
   id: string;
   email?: string;
-  role?: string;
 }
 
 export interface TenantContext {
@@ -15,41 +15,60 @@ export interface TenantContext {
   role: UserRole;
 }
 
-/**
- * Resolves the authenticated user from the incoming request or headers.
- * Supports Supabase Auth JWT cookies/headers as well as test fixtures.
- */
-export async function getAuthenticatedUser(request?: Request): Promise<AuthenticatedUser> {
-  // Check authorization header
-  const authHeader = request?.headers.get("authorization");
-  if (authHeader?.startsWith("Bearer ")) {
-    const token = authHeader.replace("Bearer ", "").trim();
-    // Test token resolution
-    if (token.startsWith("test_user_") || token.startsWith("user_")) {
-      return { id: token, email: `${token}@example.com` };
-    }
-  }
-
-  // Fallback test/development identity
-  const devUserId = process.env.DEV_USER_ID || "user_owner";
-  return { id: devUserId, email: "engineer@example.com" };
+function canUseExplicitDevIdentity(): boolean {
+  return process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_AUTH === "true";
 }
 
 /**
- * Validates that the user has valid membership in the given organization.
+ * Resolves a real Supabase Auth user. No production fallback identity exists.
+ * Bearer tokens are verified with Supabase Auth; cookie sessions use the SSR client.
  */
+export async function getAuthenticatedUser(request?: Request): Promise<AuthenticatedUser> {
+  const authHeader = request?.headers.get("authorization");
+  const bearer = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+
+  if (bearer) {
+    if (process.env.NODE_ENV === "test" && bearer.startsWith("test_user_")) {
+      return { id: bearer, email: `${bearer}@example.com` };
+    }
+
+    const { data, error } = await createAdminClient().auth.getUser(bearer);
+    if (error || !data.user) {
+      throw new UnauthorizedError("Invalid or expired Supabase access token");
+    }
+    return { id: data.user.id, email: data.user.email || undefined };
+  }
+
+  try {
+    const supabase = await createServerAuthClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data.user) {
+      return { id: data.user.id, email: data.user.email || undefined };
+    }
+  } catch (error) {
+    if (!canUseExplicitDevIdentity()) throw error;
+  }
+
+  if (canUseExplicitDevIdentity() && process.env.DEV_USER_ID) {
+    return {
+      id: process.env.DEV_USER_ID,
+      email: process.env.DEV_USER_EMAIL || "developer@localhost",
+    };
+  }
+
+  throw new UnauthorizedError("Authentication required");
+}
+
 export async function requireOrganizationMembership(
   userId: string,
   organizationId: string
 ): Promise<TenantContext> {
   const org = await OrganizationRepo.findById(organizationId);
-  if (!org) {
-    throw new ForbiddenError(`Organization '${organizationId}' not found or inaccessible`);
-  }
+  if (!org) throw new NotFoundError("Organization", organizationId);
 
   const membership = await OrganizationMemberRepo.getMembership(organizationId, userId);
   if (!membership) {
-    throw new ForbiddenError(`User '${userId}' does not have access to organization '${org.name}'`);
+    throw new ForbiddenError("You do not have access to this organization");
   }
 
   return {
@@ -60,17 +79,31 @@ export async function requireOrganizationMembership(
   };
 }
 
-/**
- * Enforces authenticated tenant context for API routes.
- */
+export async function requireOrganizationBySlug(
+  userId: string,
+  orgSlug: string
+): Promise<TenantContext> {
+  const org = await OrganizationRepo.findBySlug(orgSlug);
+  if (!org) throw new NotFoundError("Organization", orgSlug);
+  return requireOrganizationMembership(userId, org.id);
+}
+
 export async function assertTenantAccess(
   request: Request,
   organizationId: string
 ): Promise<TenantContext> {
   const user = await getAuthenticatedUser(request);
-  if (!user || !user.id) {
-    throw new UnauthorizedError("Authentication required");
-  }
-
   return requireOrganizationMembership(user.id, organizationId);
+}
+
+/** Resolve workspace ownership before accepting any tenant identifier from the client. */
+export async function resolveWorkspaceTenant(
+  request: Request,
+  workspaceId: string
+): Promise<{ user: AuthenticatedUser; tenant: TenantContext; workspace: any }> {
+  const user = await getAuthenticatedUser(request);
+  const workspace = await WorkspaceRepo.findByIdAny(workspaceId);
+  if (!workspace) throw new NotFoundError("Workspace", workspaceId);
+  const tenant = await requireOrganizationMembership(user.id, workspace.organization_id);
+  return { user, tenant, workspace };
 }

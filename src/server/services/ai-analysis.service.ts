@@ -1,5 +1,5 @@
 import { AuditLogger } from "@/lib/audit/logger";
-import { InMemoryDatabase } from "@/lib/supabase/server";
+import { AIAnalysisRepo } from "@/lib/supabase/repositories";
 import type { CodingAgent } from "../providers/agent/agent.interface";
 import type { AIProvider, IncidentDiagnosis, RepairPlan } from "../providers/ai/ai.interface";
 import { AuthGuard } from "../rbac/guard";
@@ -17,6 +17,12 @@ export class AIAnalysisService {
   ): Promise<IncidentDiagnosis> {
     await AuthGuard.assertPermission(userId, organizationId, "incident:diagnose");
     const incident = await IncidentService.getIncident(userId, organizationId, incidentId);
+    if (workspaceId) {
+      const workspace = await WorkspaceService.getWorkspace(userId, organizationId, workspaceId);
+      if (workspace.project_id !== incident.project_id) {
+        throw new Error("Incident does not belong to the workspace project");
+      }
+    }
 
     const diagnosis = await aiProvider.diagnoseIncident({
       title: incident.title,
@@ -25,20 +31,15 @@ export class AIAnalysisService {
       stacktrace: incident.sanitized_metadata?.stacktrace || [],
     });
 
-    const analysisId = `ai_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const record = {
-      id: analysisId,
+    await AIAnalysisRepo.create({
       workspace_id: workspaceId || null,
       incident_id: incidentId,
       provider: "openrouter",
-      model: process.env.OPENROUTER_ANALYSIS_MODEL || "configured-openrouter-model",
+      model: process.env.OPENROUTER_ANALYSIS_MODEL || process.env.OPENROUTER_MODEL || "openrouter/auto",
       analysis_type: "incident_diagnosis",
-      structured_result: diagnosis,
+      structured_result: diagnosis as any,
       created_by: userId,
-      created_at: new Date().toISOString(),
-    };
-
-    InMemoryDatabase.getInstance().aiAnalyses.set(analysisId, record);
+    });
 
     await AuditLogger.log({
       organizationId,
@@ -63,6 +64,9 @@ export class AIAnalysisService {
     await AuthGuard.assertPermission(userId, organizationId, "workspace:run_ai_repair");
     const workspace = await WorkspaceService.getWorkspace(userId, organizationId, workspaceId);
     const incident = await IncidentService.getIncident(userId, organizationId, incidentId);
+    if (incident.project_id !== workspace.project_id) {
+      throw new Error("Incident does not belong to the workspace project");
+    }
     const project = await ProjectService.getProject(userId, organizationId, workspace.project_id);
 
     // 1. Get or generate diagnosis
@@ -74,25 +78,23 @@ export class AIAnalysisService {
 
     // 3. Propose and apply patch via coding agent
     const result = await codingAgent.proposePatch({
-      workspaceId: workspace.sandbox_id || workspace.id,
+      workspaceId: workspace.id,
       repoOwner: project.repository_owner,
       repoName: project.repository_name,
       branch: project.default_branch,
+      baseCommitSha: workspace.base_commit_sha,
       incidentTitle: incident.title,
       diagnosis,
     });
 
-    const analysisId = `patch_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    InMemoryDatabase.getInstance().aiAnalyses.set(analysisId, {
-      id: analysisId,
+    await AIAnalysisRepo.create({
       workspace_id: workspaceId,
       incident_id: incidentId,
       provider: "openhands",
       model: process.env.OPENHANDS_MODEL || "openhands-account-default",
       analysis_type: "repair_plan",
-      structured_result: result.repairPlan,
+      structured_result: result.repairPlan as any,
       created_by: userId,
-      created_at: new Date().toISOString(),
     });
 
     await AuditLogger.log({

@@ -38,7 +38,7 @@ export class OpenRouterAIProvider implements AIProvider {
     const sanitizedUserPrompt = redactSecrets(userPrompt);
 
     if (!this.apiKey) {
-      if (process.env.NODE_ENV === "test" || process.env.ALLOW_MOCK_PROVIDERS === "true") {
+      if (process.env.NODE_ENV === "test" || (process.env.NODE_ENV !== "production" && process.env.ALLOW_MOCK_PROVIDERS === "true")) {
         return this.getMockResponse(modelTier);
       }
       throw new Error("OpenRouter is not configured. Set OPENROUTER_API_KEY before running AI analysis.");

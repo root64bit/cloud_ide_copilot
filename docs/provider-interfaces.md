@@ -89,7 +89,7 @@ export interface SandboxProvider {
   getBrowserIdeUrl(sandboxId: string): Promise<string>;
 }
 ```
-- **Target primary**: `VercelSandboxProvider` (`@vercel/sandbox`) — **currently simulated; real SDK execution not yet wired**
+- **Primary**: `VercelSandboxProvider` (`@vercel/sandbox`) — real isolated execution; browser IDE remains intentionally unwired
 - **Testing**: `MockSandboxProvider`
 - **Future Alternative**: `CubeSandboxProvider`
 
@@ -121,5 +121,5 @@ export interface ProjectMemoryProvider {
   getArchitectureContext(organizationId: string, projectId: string): Promise<string>;
 }
 ```
-- **Current scaffold**: `DatabaseMemoryProvider` (currently backed by in-memory runtime storage, not PostgreSQL authority yet)
+- **Current**: `DatabaseMemoryProvider` / memory abstraction remains non-critical and is not yet the production long-term memory system
 - **Phase 2**: `TencentAgentMemoryProvider` (TencentDB Agent Memory)

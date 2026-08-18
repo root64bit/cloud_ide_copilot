@@ -1,24 +1,40 @@
 import { runs, tasks } from "@trigger.dev/sdk";
 
-const repository = process.env.OPENHANDS_TEST_REPOSITORY;
-const branch = process.env.OPENHANDS_TEST_BRANCH || "main";
+const required = {
+  workspaceId: process.env.OPENHANDS_VERIFY_WORKSPACE_ID,
+  organizationId: process.env.OPENHANDS_VERIFY_ORGANIZATION_ID,
+  projectId: process.env.OPENHANDS_VERIFY_PROJECT_ID,
+  incidentId: process.env.OPENHANDS_VERIFY_INCIDENT_ID,
+  repository: process.env.OPENHANDS_TEST_REPOSITORY,
+};
 
 if (!process.env.TRIGGER_SECRET_KEY) {
   console.error("TRIGGER_OPENHANDS_VERIFY=FAIL reason=TRIGGER_SECRET_KEY_missing");
   process.exit(1);
 }
-if (!repository || !repository.includes("/")) {
-  console.error("TRIGGER_OPENHANDS_VERIFY=FAIL reason=OPENHANDS_TEST_REPOSITORY_missing expected=owner/repository");
+
+for (const [name, value] of Object.entries(required)) {
+  if (!value) {
+    console.error(`TRIGGER_OPENHANDS_VERIFY=FAIL reason=${name}_missing`);
+    process.exit(1);
+  }
+}
+
+if (!required.repository.includes("/")) {
+  console.error("TRIGGER_OPENHANDS_VERIFY=FAIL reason=repository_invalid expected=owner/repository");
   process.exit(1);
 }
 
 const handle = await tasks.trigger("openhands-repair", {
-  workspaceId: `verify_${Date.now()}`,
-  repository,
-  branch,
-  incidentTitle: "Integration verification only",
+  workspaceId: required.workspaceId,
+  organizationId: required.organizationId,
+  projectId: required.projectId,
+  incidentId: required.incidentId,
+  repository: required.repository,
+  branch: process.env.OPENHANDS_TEST_BRANCH || "main",
+  incidentTitle: "Read-only integration verification",
   diagnosis: {
-    summary: "Verify that Trigger.dev can execute OpenHands Cloud against the selected repository.",
+    summary: "Verify that Trigger.dev can execute OpenHands Cloud against the persisted repair workspace.",
     probableRootCause: "No production defect; this is a read-only integration verification.",
     confidence: 1,
     suspectedFiles: [],

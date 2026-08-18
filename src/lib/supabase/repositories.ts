@@ -2,12 +2,7 @@ import { createAdminClient, InMemoryDatabase } from "./server";
 import type { Database, UserRole, WorkspaceStatus } from "./types";
 
 function isTestingOrMock(): boolean {
-  return (
-    process.env.NODE_ENV === "test" ||
-    process.env.ALLOW_MOCK_PROVIDERS === "true" ||
-    !process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY.startsWith("placeholder")
-  );
+  return process.env.NODE_ENV === "test" || (process.env.NODE_ENV !== "production" && process.env.ALLOW_MOCK_PROVIDERS === "true");
 }
 
 function getDb(): any {
@@ -59,6 +54,24 @@ export class OrganizationRepo {
     return data || [];
   }
 
+  static async listByIds(ids: string[]) {
+    const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+    if (uniqueIds.length === 0) return [];
+    if (isTestingOrMock()) {
+      return uniqueIds
+        .map((id) => InMemoryDatabase.getInstance().organizations.get(id))
+        .filter(Boolean);
+    }
+    const supabase = getDb();
+    const { data, error } = await supabase
+      .from("organizations")
+      .select("*")
+      .in("id", uniqueIds)
+      .order("name", { ascending: true });
+    if (error) throw error;
+    return data || [];
+  }
+
   static async create(data: Database["public"]["Tables"]["organizations"]["Insert"]) {
     const id = data.id || crypto.randomUUID();
     const row = {
@@ -79,6 +92,16 @@ export class OrganizationRepo {
       .single();
     if (error) throw error;
     return created;
+  }
+
+  static async deleteById(id: string) {
+    if (isTestingOrMock()) {
+      return InMemoryDatabase.getInstance().organizations.delete(id);
+    }
+    const supabase = getDb();
+    const { error } = await supabase.from("organizations").delete().eq("id", id);
+    if (error) throw error;
+    return true;
   }
 }
 
@@ -106,6 +129,21 @@ export class OrganizationMemberRepo {
       .maybeSingle();
     if (error) throw error;
     return data as any;
+  }
+
+  static async listByUser(userId: string) {
+    if (isTestingOrMock()) {
+      return Array.from(InMemoryDatabase.getInstance().members.values()).filter(
+        (m) => m.user_id === userId
+      );
+    }
+    const supabase = getDb();
+    const { data, error } = await supabase
+      .from("organization_members")
+      .select("*")
+      .eq("user_id", userId);
+    if (error) throw error;
+    return data || [];
   }
 
   static async listByOrg(organizationId: string) {
@@ -150,6 +188,20 @@ export class OrganizationMemberRepo {
 // Project Repository
 // -----------------------------------------------------------------------------
 export class ProjectRepo {
+  static async findByIdAny(id: string) {
+    if (isTestingOrMock()) {
+      return InMemoryDatabase.getInstance().projects.get(id) || null;
+    }
+    const supabase = getDb();
+    const { data, error } = await supabase
+      .from("projects")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
   static async findById(organizationId: string, id: string) {
     if (isTestingOrMock()) {
       const proj = InMemoryDatabase.getInstance().projects.get(id);
@@ -246,9 +298,83 @@ export class ProjectRepo {
 }
 
 // -----------------------------------------------------------------------------
+// Project Integration Repository
+// -----------------------------------------------------------------------------
+export class ProjectIntegrationRepo {
+  static async findByProviderExternalId(provider: string, externalId: string) {
+    if (isTestingOrMock()) {
+      for (const integration of InMemoryDatabase.getInstance().projectIntegrations.values()) {
+        if (integration.provider === provider && String(integration.external_id) === String(externalId)) return integration;
+      }
+      return null;
+    }
+    const supabase = getDb();
+    const { data, error } = await supabase
+      .from("project_integrations")
+      .select("*")
+      .eq("provider", provider)
+      .eq("external_id", String(externalId))
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  static async findByProjectAndProvider(projectId: string, provider: string) {
+    if (isTestingOrMock()) {
+      return InMemoryDatabase.getInstance().projectIntegrations.get(`${projectId}:${provider}`) || null;
+    }
+    const supabase = getDb();
+    const { data, error } = await supabase
+      .from("project_integrations")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("provider", provider)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  static async upsert(data: Database["public"]["Tables"]["project_integrations"]["Insert"]) {
+    const id = data.id || crypto.randomUUID();
+    const row = {
+      ...data,
+      id,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (isTestingOrMock()) {
+      InMemoryDatabase.getInstance().projectIntegrations.set(`${data.project_id}:${data.provider}`, row);
+      return row;
+    }
+    const supabase = getDb();
+    const { data: saved, error } = await supabase
+      .from("project_integrations")
+      .upsert(row as any, { onConflict: "project_id,provider" })
+      .select()
+      .single();
+    if (error) throw error;
+    return saved;
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Incident Repository
 // -----------------------------------------------------------------------------
 export class IncidentRepo {
+  static async findByIdAny(id: string) {
+    if (isTestingOrMock()) {
+      return InMemoryDatabase.getInstance().incidents.get(id) || null;
+    }
+    const supabase = getDb();
+    const { data, error } = await supabase
+      .from("incidents")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
   static async findById(organizationId: string, id: string) {
     if (isTestingOrMock()) {
       const inc = InMemoryDatabase.getInstance().incidents.get(id);
@@ -364,6 +490,20 @@ export class IncidentRepo {
 // Workspace Repository
 // -----------------------------------------------------------------------------
 export class WorkspaceRepo {
+  static async findByIdAny(id: string) {
+    if (isTestingOrMock()) {
+      return InMemoryDatabase.getInstance().workspaces.get(id) || null;
+    }
+    const supabase = getDb();
+    const { data, error } = await supabase
+      .from("repair_workspaces")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
   static async findById(organizationId: string, id: string) {
     if (isTestingOrMock()) {
       const ws = InMemoryDatabase.getInstance().workspaces.get(id);
@@ -465,6 +605,28 @@ export class WorkspaceRepo {
 }
 
 // -----------------------------------------------------------------------------
+// AI Analysis Repository
+// -----------------------------------------------------------------------------
+export class AIAnalysisRepo {
+  static async create(data: Database["public"]["Tables"]["ai_analyses"]["Insert"]) {
+    const id = data.id || crypto.randomUUID();
+    const row = { ...data, id, created_at: new Date().toISOString() };
+    if (isTestingOrMock()) {
+      InMemoryDatabase.getInstance().aiAnalyses.set(id, row);
+      return row;
+    }
+    const supabase = getDb();
+    const { data: created, error } = await supabase
+      .from("ai_analyses")
+      .insert(row as any)
+      .select()
+      .single();
+    if (error) throw error;
+    return created;
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Repair Artifact Repository
 // -----------------------------------------------------------------------------
 export class RepairArtifactRepo {
@@ -481,7 +643,38 @@ export class RepairArtifactRepo {
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  static async updateStatus(id: string, status: string, stats?: any) {
+    if (isTestingOrMock()) {
+      const db = InMemoryDatabase.getInstance() as any;
+      const existing = db.repairArtifacts?.get(id);
+      if (!existing) return null;
+      const updated = { ...existing, status, ...(stats ? { stats: { ...(existing.stats || {}), ...stats } } : {}) };
+      db.repairArtifacts.set(id, updated);
+      return updated;
+    }
+    const supabase = getDb();
+    const update: any = { status };
+    if (stats) {
+      const { data: existing, error: readError } = await supabase
+        .from("repair_artifacts")
+        .select("stats")
+        .eq("id", id)
+        .maybeSingle();
+      if (readError) throw readError;
+      update.stats = { ...((existing as any)?.stats || {}), ...stats };
+    }
+    const { data, error } = await supabase
+      .from("repair_artifacts")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
     if (error) throw error;
     return data;
   }
@@ -594,14 +787,25 @@ export class PullRequestRepo {
     return created;
   }
 
-  static async updateStatus(id: string, status: "open" | "merged" | "closed", mergedBy?: string) {
+  static async updateStatus(
+    id: string,
+    status: "open" | "merged" | "closed",
+    mergedBy?: string,
+    mergeCommitSha?: string
+  ) {
     if (isTestingOrMock()) {
       const existing = InMemoryDatabase.getInstance().pullRequests.get(id);
       if (!existing) return null;
       const updated = {
         ...existing,
         status,
-        ...(status === "merged" ? { merged_at: new Date().toISOString(), merged_by: mergedBy || null } : {}),
+        ...(status === "merged"
+          ? {
+              merged_at: new Date().toISOString(),
+              merged_by: mergedBy || null,
+              merge_commit_sha: mergeCommitSha || existing.merge_commit_sha || null,
+            }
+          : {}),
       };
       InMemoryDatabase.getInstance().pullRequests.set(id, updated);
       return updated;
@@ -611,7 +815,13 @@ export class PullRequestRepo {
       .from("pull_requests")
       .update({
         status,
-        ...(status === "merged" ? { merged_at: new Date().toISOString(), merged_by: mergedBy || null } : {}),
+        ...(status === "merged"
+          ? {
+              merged_at: new Date().toISOString(),
+              merged_by: mergedBy || null,
+              merge_commit_sha: mergeCommitSha || null,
+            }
+          : {}),
       } as any)
       .eq("id", id)
       .select()
@@ -625,6 +835,39 @@ export class PullRequestRepo {
 // Deployment Repository
 // -----------------------------------------------------------------------------
 export class DeploymentRepo {
+  static async listByWorkspace(workspaceId: string) {
+    if (isTestingOrMock()) {
+      return Array.from(InMemoryDatabase.getInstance().deployments.values())
+        .filter((deployment) => deployment.workspace_id === workspaceId)
+        .sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at)));
+    }
+    const supabase = getDb();
+    const { data, error } = await supabase
+      .from("deployments")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  static async findByExternalDeploymentId(externalDeploymentId: string) {
+    if (isTestingOrMock()) {
+      for (const deployment of InMemoryDatabase.getInstance().deployments.values()) {
+        if (deployment.external_deployment_id === externalDeploymentId) return deployment;
+      }
+      return null;
+    }
+    const supabase = getDb();
+    const { data, error } = await supabase
+      .from("deployments")
+      .select("*")
+      .eq("external_deployment_id", externalDeploymentId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
   static async findByWorkspaceId(workspaceId: string) {
     if (isTestingOrMock()) {
       for (const dpl of InMemoryDatabase.getInstance().deployments.values()) {
@@ -637,6 +880,8 @@ export class DeploymentRepo {
       .from("deployments")
       .select("*")
       .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (error) throw error;
     return data;
@@ -677,6 +922,42 @@ export class DeploymentRepo {
       .single();
     if (error) throw error;
     return created;
+  }
+
+  static async upsertByExternalId(data: Database["public"]["Tables"]["deployments"]["Insert"]) {
+    const existing = await this.findByExternalDeploymentId(data.external_deployment_id);
+    if (!existing) return this.create(data);
+
+    if (isTestingOrMock()) {
+      const updated = {
+        ...existing,
+        ...data,
+        id: existing.id,
+        created_at: existing.created_at,
+      };
+      InMemoryDatabase.getInstance().deployments.set(existing.id, updated as any);
+      return updated;
+    }
+
+    const supabase = getDb();
+    const { data: updated, error } = await supabase
+      .from("deployments")
+      .update({
+        project_id: data.project_id,
+        workspace_id: data.workspace_id ?? existing.workspace_id,
+        provider: data.provider || existing.provider,
+        environment: data.environment || existing.environment,
+        branch: data.branch,
+        commit_sha: data.commit_sha,
+        url: data.url,
+        status: data.status || existing.status,
+        ready_at: data.ready_at ?? existing.ready_at,
+      } as any)
+      .eq("id", existing.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return updated;
   }
 }
 

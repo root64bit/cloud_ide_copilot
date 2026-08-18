@@ -1,11 +1,11 @@
 import { task } from "@trigger.dev/sdk";
 
 /**
- * Reserved orchestration entrypoint for the deterministic sandbox validation pipeline.
+ * Reserved future durable validation entrypoint.
  *
- * IMPORTANT: this task intentionally fails until the Vercel Sandbox provider is switched
- * from the scaffold implementation to a real @vercel/sandbox-backed workspace. Returning
- * allPassed=true here would create a dangerous false release gate.
+ * The current real validation pipeline executes against Vercel Sandbox from the
+ * Vercel-hosted control plane. Moving this long-running workflow to Trigger.dev
+ * requires explicit Vercel Sandbox external credentials in the Trigger worker.
  */
 export interface ValidationPipelinePayload {
   organizationId: string;
@@ -18,7 +18,7 @@ export const validationPipelineTask = task({
   id: "validation-pipeline",
   run: async (payload: ValidationPipelinePayload) => {
     throw new Error(
-      `VALIDATION_PIPELINE_NOT_WIRED: workspace ${payload.workspaceId} cannot be validated until the real sandbox provider is enabled.`
+      `VALIDATION_PIPELINE_CONTROL_PLANE_ONLY: workspace ${payload.workspaceId} validation currently runs through the authenticated Vercel control plane.`
     );
   },
 });

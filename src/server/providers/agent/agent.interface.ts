@@ -5,6 +5,7 @@ export interface CodingAgentTaskContext {
   repoOwner: string;
   repoName: string;
   branch?: string;
+  baseCommitSha?: string;
   incidentTitle: string;
   diagnosis: IncidentDiagnosis;
   instructions?: string;

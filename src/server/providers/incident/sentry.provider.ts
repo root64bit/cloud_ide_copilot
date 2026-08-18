@@ -7,7 +7,11 @@ export class SentryIncidentProvider implements IncidentProvider {
   private secret: string;
 
   constructor() {
-    this.secret = process.env.SENTRY_WEBHOOK_SECRET || "mock-sentry-secret";
+    const configured = process.env.SENTRY_WEBHOOK_SECRET;
+    if (!configured && process.env.NODE_ENV !== "test" && !(process.env.NODE_ENV !== "production" && process.env.ALLOW_MOCK_PROVIDERS === "true")) {
+      throw new Error("SENTRY_WEBHOOK_SECRET is required");
+    }
+    this.secret = configured || "mock-sentry-secret";
   }
 
   verifyWebhook(rawPayload: string | Buffer, signatureHeader: string | null): boolean {
@@ -20,7 +24,11 @@ export class SentryIncidentProvider implements IncidentProvider {
     const issue = data.issue || data;
     const event = data.event || {};
 
-    const externalIssueId = String(issue.id || event.issue_id || `sentry_${Date.now()}`);
+    const rawIssueId = issue.id || event.issue_id || event.event_id || event.id;
+    if (!rawIssueId) {
+      throw new Error("Sentry webhook does not contain a stable issue/event identifier");
+    }
+    const externalIssueId = String(rawIssueId);
     const externalEventId = event.event_id || event.id || undefined;
     const title = issue.title || event.title || event.message || "Unknown Sentry Error";
 

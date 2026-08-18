@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   IncidentRepo,
-  OrganizationRepo,
   ProjectRepo,
   WorkspaceRepo,
 } from "@/lib/supabase/repositories";
@@ -20,6 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import React from "react";
+import { getTenantPageContext } from "@/server/tenant/context";
 
 export const dynamic = "force-dynamic";
 
@@ -29,16 +29,14 @@ export default async function DashboardOverviewPage({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  const org = (await OrganizationRepo.findBySlug(orgSlug)) || {
-    id: "00000000-0000-0000-0000-000000000001",
-    name: "Acme Engineering",
-    slug: orgSlug,
-  };
+  const { tenant } = await getTenantPageContext(orgSlug);
 
-  const projects = await ProjectRepo.listByOrg(org.id);
-  const allIncidents = await IncidentRepo.listByOrg(org.id);
+  const projects = await ProjectRepo.listByOrg(tenant.organizationId);
+  const allIncidents = await IncidentRepo.listByOrg(tenant.organizationId);
   const incidents = allIncidents.filter((i: any) => i.status !== "resolved");
-  const workspaces = await WorkspaceRepo.listByOrg(org.id);
+  const allWorkspaces = await WorkspaceRepo.listByOrg(tenant.organizationId);
+  const terminalStatuses = new Set(["completed", "failed", "stopped", "expired"]);
+  const workspaces = allWorkspaces.filter((workspace: any) => !terminalStatuses.has(workspace.status));
 
   return (
     <div className="space-y-6">
@@ -102,10 +100,10 @@ export default async function DashboardOverviewPage({
         <Card>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">Production Status</p>
+              <p className="text-xs text-muted-foreground">Release Policy</p>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-sm font-bold text-emerald-400">Protected</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="text-sm font-bold text-emerald-400">Human gated</span>
               </div>
             </div>
             <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">

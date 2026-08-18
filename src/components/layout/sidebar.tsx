@@ -2,9 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import {
-  Activity,
   AlertTriangle,
-  Bot,
   Box,
   CheckCircle2,
   FolderGit2,
@@ -16,15 +14,20 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
-import { OrgSwitcher } from "./org-switcher";
+import { OrgSwitcher, type OrgSwitcherOrganization } from "./org-switcher";
 
-export function Sidebar({ orgSlug = "acme-corp" }: { orgSlug?: string }) {
+export function Sidebar({
+  orgSlug,
+  organizations,
+}: {
+  orgSlug: string;
+  organizations: OrgSwitcherOrganization[];
+}) {
   const pathname = usePathname();
-
   const navigation = [
     { name: "Overview", href: `/${orgSlug}`, icon: LayoutDashboard },
     { name: "Projects", href: `/${orgSlug}/projects`, icon: FolderGit2 },
-    { name: "Incidents", href: `/${orgSlug}/incidents`, icon: AlertTriangle, badge: "1" },
+    { name: "Incidents", href: `/${orgSlug}/incidents`, icon: AlertTriangle },
     { name: "Workspaces", href: `/${orgSlug}/workspaces`, icon: Box },
     { name: "Deployments", href: `/${orgSlug}/deployments`, icon: CheckCircle2 },
     { name: "Team & RBAC", href: `/${orgSlug}/team`, icon: Users },
@@ -44,16 +47,12 @@ export function Sidebar({ orgSlug = "acme-corp" }: { orgSlug?: string }) {
             <p className="text-[10px] text-muted-foreground">Engineering Platform</p>
           </div>
         </div>
-        <OrgSwitcher currentOrgSlug={orgSlug} />
+        <OrgSwitcher currentOrgSlug={orgSlug} organizations={organizations} />
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navigation.map((item) => {
-          const isActive =
-            item.href === `/${orgSlug}`
-              ? pathname === `/${orgSlug}`
-              : pathname.startsWith(item.href);
-
+          const isActive = item.href === `/${orgSlug}` ? pathname === `/${orgSlug}` : pathname.startsWith(item.href);
           return (
             <Link
               key={item.name}
@@ -69,11 +68,6 @@ export function Sidebar({ orgSlug = "acme-corp" }: { orgSlug?: string }) {
                 <item.icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
                 <span>{item.name}</span>
               </div>
-              {item.badge && (
-                <span className="bg-destructive/20 text-destructive text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                  {item.badge}
-                </span>
-              )}
             </Link>
           );
         })}
@@ -82,11 +76,11 @@ export function Sidebar({ orgSlug = "acme-corp" }: { orgSlug?: string }) {
       <div className="p-3 border-t border-border/80 bg-card/40">
         <div className="rounded-lg border border-border/60 p-2.5 bg-secondary/30">
           <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Sandbox Gateway
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            Isolated repair execution
           </div>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            Isolated execution active (Vercel Sandbox)
+            Vercel Sandbox is created only when a workspace is launched.
           </p>
         </div>
       </div>

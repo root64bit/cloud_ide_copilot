@@ -59,6 +59,10 @@ export class MockGitProvider implements GitProvider {
     };
   }
 
+  async getInstallationAccessToken(_installationId: number): Promise<string> {
+    return "mock-installation-token";
+  }
+
   async createBranch(options: CreateBranchOptions): Promise<{ ref: string; sha: string }> {
     assertSafeRepairBranch(options.newBranch, options.baseBranch);
     const sha = "a9f82d1c5e4b7890123456789abcdef012345678";

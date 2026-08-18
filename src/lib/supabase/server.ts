@@ -1,33 +1,83 @@
+import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import type { Database } from "./types";
 
+function requireServerEnv(name: string, aliases: string[] = []): string {
+  const keys = [name, ...aliases];
+  for (const key of keys) {
+    const value = process.env[key];
+    if (value && !value.startsWith("placeholder")) return value;
+  }
+  throw new Error(`Missing required server environment variable: ${name}`);
+}
+
+function getSupabaseUrl(): string {
+  return requireServerEnv("NEXT_PUBLIC_SUPABASE_URL", ["SUPABASE_URL"]);
+}
+
+function getSupabasePublishableKey(): string {
+  return requireServerEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", ["NEXT_PUBLIC_SUPABASE_ANON_KEY"]);
+}
+
 /**
- * Creates a server-side Supabase client with admin/service-role privileges.
- * Strictly used in protected backend services and API routes after server-side RBAC validation.
+ * Service-role client. This bypasses RLS and must only be used after explicit
+ * server-side authorization checks or for trusted machine-to-machine workflows.
  */
 export function createAdminClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder-service-key";
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseSecret = requireServerEnv("SUPABASE_SECRET_KEY", ["SUPABASE_SERVICE_ROLE_KEY"]);
 
-  return createSupabaseClient<Database>(supabaseUrl, supabaseServiceKey, {
+  return createSupabaseClient<Database>(supabaseUrl, supabaseSecret, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+      detectSessionInUrl: false,
     },
   });
 }
 
 /**
- * Mock / In-Memory store for tests and offline development
+ * Cookie-aware Supabase client for Server Components, Server Actions and Route
+ * Handlers. User identity returned by `auth.getUser()` is revalidated by the
+ * Supabase Auth service and is safe to use for authorization decisions.
+ */
+export async function createServerAuthClient() {
+  const cookieStore = await cookies();
+
+  return createServerClient<Database>(getSupabaseUrl(), getSupabasePublishableKey(), {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }: { name: string; value: string; options?: any }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Server Components cannot always write cookies. Session refresh is
+          // handled by middleware; Route Handlers/Server Actions can write them.
+        }
+      },
+    },
+  });
+}
+
+/**
+ * In-memory store is intentionally test-only. Runtime repositories only use it
+ * when NODE_ENV=test or ALLOW_MOCK_PROVIDERS=true is explicitly configured outside production.
  */
 export class InMemoryDatabase {
   private static instance: InMemoryDatabase;
   public organizations = new Map<string, any>();
   public members = new Map<string, any>();
   public projects = new Map<string, any>();
+  public projectIntegrations = new Map<string, any>();
   public incidents = new Map<string, any>();
   public workspaces = new Map<string, any>();
   public aiAnalyses = new Map<string, any>();
+  public repairArtifacts = new Map<string, any>();
   public commandRuns = new Map<string, any>();
   public pullRequests = new Map<string, any>();
   public deployments = new Map<string, any>();
@@ -49,9 +99,11 @@ export class InMemoryDatabase {
     this.organizations.clear();
     this.members.clear();
     this.projects.clear();
+    this.projectIntegrations.clear();
     this.incidents.clear();
     this.workspaces.clear();
     this.aiAnalyses.clear();
+    this.repairArtifacts.clear();
     this.commandRuns.clear();
     this.pullRequests.clear();
     this.deployments.clear();
@@ -71,37 +123,21 @@ export class InMemoryDatabase {
       updated_at: new Date().toISOString(),
     });
 
-    this.members.set(`${orgId}:user_owner`, {
-      id: "mem_1",
-      organization_id: orgId,
-      user_id: "user_owner",
-      role: "owner",
-      created_at: new Date().toISOString(),
-    });
-
-    this.members.set(`${orgId}:user_admin`, {
-      id: "mem_2",
-      organization_id: orgId,
-      user_id: "user_admin",
-      role: "admin",
-      created_at: new Date().toISOString(),
-    });
-
-    this.members.set(`${orgId}:user_engineer`, {
-      id: "mem_3",
-      organization_id: orgId,
-      user_id: "user_engineer",
-      role: "engineer",
-      created_at: new Date().toISOString(),
-    });
-
-    this.members.set(`${orgId}:user_viewer`, {
-      id: "mem_4",
-      organization_id: orgId,
-      user_id: "user_viewer",
-      role: "viewer",
-      created_at: new Date().toISOString(),
-    });
+    for (const [id, userId, role] of [
+      ["mem_1", "user_owner", "owner"],
+      ["mem_2", "user_admin", "admin"],
+      ["mem_3", "user_engineer", "engineer"],
+      ["mem_4", "user_viewer", "viewer"],
+    ] as const) {
+      this.members.set(`${orgId}:${userId}`, {
+        id,
+        organization_id: orgId,
+        user_id: userId,
+        role,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
 
     const projectId = "10000000-0000-0000-0000-000000000001";
     this.projects.set(projectId, {
@@ -132,6 +168,17 @@ export class InMemoryDatabase {
       updated_at: new Date().toISOString(),
     });
 
+    this.projectIntegrations.set(`${projectId}:github`, {
+      id: "30000000-0000-0000-0000-000000000001",
+      project_id: projectId,
+      provider: "github",
+      external_id: "123456",
+      config_encrypted: { installationId: 123456 },
+      status: "connected",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
     const incidentId = "20000000-0000-0000-0000-000000000001";
     this.incidents.set(incidentId, {
       id: incidentId,
@@ -147,8 +194,8 @@ export class InMemoryDatabase {
       commit_sha: "a9f82d1c5e4b7890123456789abcdef012345678",
       culprit: "src/lib/checkout/pricing.ts in calculateTotal",
       status: "unresolved",
-      first_seen_at: new Date(Date.now() - 7200000).toISOString(),
-      last_seen_at: new Date(Date.now() - 300000).toISOString(),
+      first_seen_at: new Date(Date.now() - 7_200_000).toISOString(),
+      last_seen_at: new Date(Date.now() - 300_000).toISOString(),
       occurrence_count: 42,
       sanitized_metadata: {
         stacktrace: [
@@ -157,8 +204,8 @@ export class InMemoryDatabase {
         ],
         tags: { browser: "Chrome 122", os: "iOS 17.3" },
       },
-      created_at: new Date(Date.now() - 7200000).toISOString(),
-      updated_at: new Date(Date.now() - 300000).toISOString(),
+      created_at: new Date(Date.now() - 7_200_000).toISOString(),
+      updated_at: new Date(Date.now() - 300_000).toISOString(),
     });
   }
 }

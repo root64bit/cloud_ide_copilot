@@ -1,54 +1,61 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
 
 const rootDir = process.cwd();
 const tempExportDir = fs.mkdtempSync(path.join(os.tmpdir(), "cic_export_"));
+const zipPath = path.join(rootDir, "cloud-ide-copilot.zip");
 
-const excluded = new Set([
+const excludedDirs = new Set([
   "node_modules",
   ".next",
   ".git",
   ".vercel",
+  ".trigger",
   "dist",
+  "build",
   "coverage",
-  "cloud-ide-copilot.zip",
+  "out",
 ]);
 
-function shouldExclude(name) {
-  if (excluded.has(name)) return true;
-  if (name.startsWith(".env")) return true;
-  if (name.endsWith(".pem") || name.endsWith(".key") || name.endsWith(".zip")) return true;
+function shouldExclude(name, isDirectory) {
+  if (isDirectory && excludedDirs.has(name)) return true;
+  if (name === ".env.example") return false;
+  if (name === ".env" || name.startsWith(".env.")) return true;
+  if (/\.(pem|key|p12|pfx|zip|tsbuildinfo)$/i.test(name)) return true;
+  if (/^(credentials|service-account).*\.json$/i.test(name)) return true;
   return false;
 }
 
 function copyRecursive(src, dest) {
   const stat = fs.statSync(src);
+  const name = path.basename(src);
+  if (shouldExclude(name, stat.isDirectory())) return;
+
   if (stat.isDirectory()) {
     fs.mkdirSync(dest, { recursive: true });
     for (const file of fs.readdirSync(src)) {
-      if (shouldExclude(file)) continue;
       copyRecursive(path.join(src, file), path.join(dest, file));
     }
   } else {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(src, dest);
   }
 }
 
-console.log("Staging clean files into:", tempExportDir);
 for (const file of fs.readdirSync(rootDir)) {
-  if (shouldExclude(file)) continue;
   copyRecursive(path.join(rootDir, file), path.join(tempExportDir, file));
 }
 
-const zipPath = path.join(rootDir, "cloud-ide-copilot.zip");
-if (fs.existsSync(zipPath)) {
-  fs.unlinkSync(zipPath);
+if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+
+if (process.platform === "win32") {
+  execFileSync("tar.exe", ["-a", "-cf", zipPath, "*"], { cwd: tempExportDir, shell: true });
+} else {
+  execFileSync("zip", ["-qr", zipPath, "."], { cwd: tempExportDir });
 }
 
-console.log("Compressing archive with tar.exe to:", zipPath);
-execSync(`tar.exe -a -cf "${zipPath}" *`, { cwd: tempExportDir });
-
 fs.rmSync(tempExportDir, { recursive: true, force: true });
-console.log("ZIP_CREATED_SUCCESSFULLY:", fs.statSync(zipPath).size, "bytes");
+console.log(`ZIP_CREATED_SUCCESSFULLY=${zipPath}`);
+console.log(`ZIP_SIZE_BYTES=${fs.statSync(zipPath).size}`);

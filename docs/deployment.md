@@ -1,60 +1,42 @@
-# Deployment Guide
+# Deployment
 
-Production application URL:
+## Control plane
+
+The main Next.js application deploys to Vercel:
 
 ```text
 https://cloud-ide-copilot.vercel.app/
 ```
 
-## Vercel control plane
+Apply Supabase migrations through `00006_release_observation_hardening.sql` before deploying this source.
 
-Configure the server-side provider secrets documented in `docs/environment-variables.md` and redeploy after environment changes.
+## Provider environments
 
-For the OpenHands/Trigger.dev repair path, Vercel currently needs at minimum:
+Vercel must contain the server-side Supabase, GitHub App, OpenRouter, OpenHands/Trigger control-plane, Sentry, and current Vercel deployment-discovery configuration documented in `.env.example`.
 
-```text
-TRIGGER_SECRET_KEY=<Trigger.dev production environment secret>
-OPENROUTER_API_KEY=<OpenRouter key>
-```
-
-Do not expose either with `NEXT_PUBLIC_`.
-
-## Trigger.dev deployment
-
-Confirm `trigger.config.ts` points at your real Trigger.dev project, then deploy tasks:
+Trigger.dev must contain the Supabase/OpenHands environment required by the `openhands-repair` worker. Deploy tasks with:
 
 ```bash
 npm run trigger:deploy
 ```
 
-Configure `OPENHANDS_API_KEY` in the Trigger.dev environment used by that deployment.
+## Release safety
 
-See `docs/openhands-trigger-setup.md`.
-
-## Supabase
-
-The existing SQL migrations should be applied in order when moving to the real persistence phase:
+A repair does not ship by changing Vercel production directly. The path is:
 
 ```text
-00001_initial_schema.sql
-00002_rls_policies.sql
-00003_audit_triggers.sql
-00004_project_memory.sql
+Vercel Sandbox
+ -> deterministic validation
+ -> ai-repair Git branch
+ -> GitHub Pull Request
+ -> Vercel Preview observed READY
+ -> explicit authorized human approval
+ -> GitHub merge
+ -> exact merge SHA observed in READY Vercel production deployment
 ```
 
-However, applying the migrations alone does not make the current application production-persistent. Core services must first be migrated off `InMemoryDatabase`.
+Only the final observed production deployment moves the repair workspace to `completed`.
 
-## Webhooks
+## Public SaaS warning
 
-Current intended endpoints:
-
-```text
-https://cloud-ide-copilot.vercel.app/api/webhooks/github
-https://cloud-ide-copilot.vercel.app/api/webhooks/sentry
-```
-
-Enable external webhooks only after the corresponding route is deployed, secrets are configured, signature verification is tested, and persistence/tenant mapping is correct.
-
-## Production-readiness warning
-
-Do not enable autonomous production repair/ship for customers yet. The current blockers are documented in `SETUP_REQUIRED.md` and `AUDIT_MANIFEST.md`.
+The current GitHub installation setup and Vercel deployment-discovery credentials are suitable for the private/platform-owned MVP. Before third-party customer onboarding, implement secure GitHub user-authorization/OAuth installation binding and customer-specific Vercel Integration/OAuth credentials.

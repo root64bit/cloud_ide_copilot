@@ -1,6 +1,6 @@
 import { AuditLogger } from "@/lib/audit/logger";
 import { NotFoundError } from "@/lib/errors";
-import { ProjectRepo } from "@/lib/supabase/repositories";
+import { ProjectIntegrationRepo, ProjectRepo } from "@/lib/supabase/repositories";
 import type { ProjectStatus } from "@/lib/supabase/types";
 import { AuthGuard } from "../rbac/guard";
 
@@ -13,6 +13,7 @@ export interface CreateProjectInput {
   repositoryName: string;
   repositoryId?: number;
   defaultBranch?: string;
+  githubInstallationId?: number;
   vercelProjectId?: string;
   vercelTeamId?: string;
   productionDomain?: string;
@@ -55,12 +56,36 @@ export class ProjectService {
       status: "active" as ProjectStatus,
     });
 
+    if (input.githubInstallationId) {
+      await ProjectIntegrationRepo.upsert({
+        project_id: project.id,
+        provider: "github",
+        external_id: String(input.githubInstallationId),
+        config_encrypted: { installationId: input.githubInstallationId },
+        status: "connected",
+      });
+    }
+
+    if (input.vercelProjectId) {
+      await ProjectIntegrationRepo.upsert({
+        project_id: project.id,
+        provider: "vercel",
+        external_id: input.vercelProjectId,
+        config_encrypted: { teamId: input.vercelTeamId || null },
+        status: "connected",
+      });
+    }
+
     await AuditLogger.log({
       organizationId: input.organizationId,
       projectId: project.id,
       userId,
       eventType: "project.created",
-      metadata: { projectName: input.name, repo: `${input.repositoryOwner}/${input.repositoryName}` },
+      metadata: {
+        projectName: input.name,
+        repo: `${input.repositoryOwner}/${input.repositoryName}`,
+        githubInstallationId: input.githubInstallationId || null,
+      },
     });
 
     return project;
@@ -68,16 +93,9 @@ export class ProjectService {
 
   public static async getProject(userId: string, organizationId: string, projectIdOrSlug: string) {
     await AuthGuard.assertPermission(userId, organizationId, "project:view");
-
     let project = await ProjectRepo.findById(organizationId, projectIdOrSlug);
-    if (!project) {
-      project = await ProjectRepo.findBySlug(organizationId, projectIdOrSlug);
-    }
-
-    if (!project) {
-      throw new NotFoundError("Project", projectIdOrSlug);
-    }
-
+    if (!project) project = await ProjectRepo.findBySlug(organizationId, projectIdOrSlug);
+    if (!project) throw new NotFoundError("Project", projectIdOrSlug);
     return project;
   }
 

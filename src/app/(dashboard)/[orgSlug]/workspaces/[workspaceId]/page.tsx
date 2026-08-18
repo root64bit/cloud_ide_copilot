@@ -19,26 +19,21 @@ import {
   CheckCircle2,
   Code2,
   ExternalLink,
-  GitBranch,
   GitPullRequest,
-  Lock,
-  Play,
-  ShieldAlert,
   Sparkles,
-  StopCircle,
   Terminal,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 export default function RepairWorkspacePage() {
   const params = useParams();
-  const orgSlug = (params.orgSlug as string) || "acme-corp";
-  const workspaceId = (params.workspaceId as string) || "ws_onedealer_repair_1";
+  const orgSlug = params.orgSlug as string;
+  const workspaceId = params.workspaceId as string;
 
   const [activeTab, setActiveTab] = useState("diff");
-  const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>("ready");
+  const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>("creating");
   const [terminalOutput, setTerminalOutput] = useState<string>(
     "Workspace loaded. Run a real provider action to begin."
   );
@@ -63,6 +58,84 @@ export default function RepairWorkspacePage() {
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadWorkspace = async () => {
+      try {
+        const response = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}`, { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || "Unable to load workspace");
+        if (cancelled) return;
+
+        setWorkspaceStatus(data.workspace.status);
+        if (data.pullRequest) {
+          setPullRequest({
+            number: data.pullRequest.number,
+            url: data.pullRequest.url,
+            branch: data.pullRequest.branch,
+            status: data.pullRequest.status,
+          });
+        }
+        if (data.preview?.url) setPreviewUrl(data.preview.url);
+        if (data.repairArtifact?.patchContent) setRepairDiff(data.repairArtifact.patchContent);
+        const conversationUrl = data.repairArtifact?.stats?.conversationUrl;
+        if (typeof conversationUrl === "string") setOpenHandsConversationUrl(conversationUrl);
+        setTerminalOutput((prev) => `${prev}\n[Workspace] Persisted status: ${data.workspace.status}\n[Sandbox] ${data.workspace.sandbox_id || "not assigned"}`);
+      } catch (loadError) {
+        if (!cancelled) {
+          const message = loadError instanceof Error ? loadError.message : "Unable to load workspace";
+          setTerminalOutput((prev) => `${prev}\n[Workspace Error] ${message}`);
+        }
+      }
+    };
+    void loadWorkspace();
+    return () => { cancelled = true; };
+  }, [workspaceId]);
+
+  // Resume production observation after a reload or after the foreground merge poll times out.
+  useEffect(() => {
+    if (workspaceStatus !== "merged" || isApproving) return;
+
+    let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    let lastObservation = "";
+
+    const refreshProduction = async () => {
+      try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/production`, { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || "Unable to observe production deployment");
+        if (cancelled || !data.observed) return;
+
+        const observationKey = `${data.status || "unknown"}:${data.productionUrl || ""}`;
+        if (observationKey !== lastObservation) {
+          lastObservation = observationKey;
+          setTerminalOutput((prev) => `${prev}\n[Vercel Production] ${data.status}: ${data.productionUrl || "URL unavailable"}`);
+        }
+
+        if (data.status === "ready") {
+          setWorkspaceStatus("completed");
+          if (intervalId) clearInterval(intervalId);
+        } else if (data.status === "error" || data.status === "canceled") {
+          if (intervalId) clearInterval(intervalId);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : "Unable to observe production deployment";
+          setTerminalOutput((prev) => `${prev}\n[Production Observation] ${message}`);
+        }
+      }
+    };
+
+    void refreshProduction();
+    intervalId = setInterval(() => void refreshProduction(), 10_000);
+
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [workspaceId, workspaceStatus, isApproving]);
+
   // 1. Generate AI Repair Patch through a real Trigger.dev -> OpenHands Cloud run
   const handleGenerateRepair = async () => {
     setIsRepairing(true);
@@ -72,7 +145,7 @@ export default function RepairWorkspacePage() {
       const res = await fetch(`/api/workspaces/${workspaceId}/repair`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId: "00000000-0000-0000-0000-000000000001" }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -94,7 +167,7 @@ export default function RepairWorkspacePage() {
 
       while (Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 3000));
-        const runRes = await fetch(`/api/trigger/runs/${encodeURIComponent(data.runId)}`, {
+        const runRes = await fetch(`/api/trigger/runs/${encodeURIComponent(data.runId)}?workspaceId=${encodeURIComponent(workspaceId)}`, {
           cache: "no-store",
         });
         const runData = await runRes.json();
@@ -125,6 +198,13 @@ export default function RepairWorkspacePage() {
 [OpenHands] Real Cloud conversation completed: ${result.conversationId || "unknown"}
 [OpenHands] Modified files: ${(result.modifiedFiles || []).join(", ") || "none"}`
         );
+
+        const syncRes = await fetch(`/api/workspaces/${workspaceId}/sync-repair`, { method: "POST" });
+        const syncData = await syncRes.json();
+        if (!syncRes.ok) throw new Error(syncData?.error || "Unable to apply OpenHands repair to Vercel Sandbox");
+        setWorkspaceStatus("ready");
+        setTerminalOutput((prev) => `${prev}
+[Vercel Sandbox] Repair artifact applied and verified with git apply --check.`);
         return;
       }
 
@@ -146,17 +226,14 @@ export default function RepairWorkspacePage() {
       const res = await fetch(`/api/workspaces/${workspaceId}/commands`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          commandType: cmdType,
-          organizationId: "00000000-0000-0000-0000-000000000001",
-        }),
+        body: JSON.stringify({ commandType: cmdType }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setTerminalOutput((prev) => `${prev}\n\n$ ${data.commandRun.command_display}\n${data.commandRun.stdout_excerpt || data.commandRun.stderr_excerpt}`);
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Sandbox command failed");
+      setTerminalOutput((prev) => `${prev}\n\n$ ${data.commandRun.command_display}\n${data.commandRun.stdout_excerpt || data.commandRun.stderr_excerpt || ""}`);
     } catch (err) {
-      console.error(err);
+      const message = err instanceof Error ? err.message : "Sandbox command failed";
+      setTerminalOutput((prev) => `${prev}\n[Command Error] ${message}`);
     } finally {
       setIsExecutingCommand(false);
     }
@@ -170,16 +247,16 @@ export default function RepairWorkspacePage() {
       const res = await fetch(`/api/workspaces/${workspaceId}/validate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId: "00000000-0000-0000-0000-000000000001" }),
+        body: JSON.stringify({}),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setValidationResult(data.validationResult);
-        setWorkspaceStatus(data.validationResult.allPassed ? "ready_for_review" : "validation_failed");
-        setTerminalOutput((prev) => `${prev}\n\n[Validation Gate] Validation pipeline completed. All passed: ${data.validationResult.allPassed}`);
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Validation pipeline failed");
+      setValidationResult(data.validationResult);
+      setWorkspaceStatus(data.validationResult.allPassed ? "ready_for_review" : "validation_failed");
+      setTerminalOutput((prev) => `${prev}\n\n[Validation Gate] Real sandbox validation completed. All passed: ${data.validationResult.allPassed}`);
     } catch (err) {
-      console.error(err);
+      const message = err instanceof Error ? err.message : "Validation pipeline failed";
+      setTerminalOutput((prev) => `${prev}\n[Validation Error] ${message}`);
       setWorkspaceStatus("validation_failed");
     } finally {
       setIsValidating(false);
@@ -194,25 +271,44 @@ export default function RepairWorkspacePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          organizationId: "00000000-0000-0000-0000-000000000001",
-          title: "fix(checkout): safely handle optional discountCode object",
-          description: "Defensive check added in calculateTotal with regression test.",
+          title: `fix: validated repair from workspace ${workspaceId}`,
+          description: "AI-assisted repair validated in an isolated Vercel Sandbox. Human production approval remains required.",
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setPullRequest({
-          number: data.result.pullRequest.number,
-          url: data.result.pullRequest.url,
-          branch: data.result.pullRequest.branch,
-          status: data.result.pullRequest.status,
-        });
-        setPreviewUrl(data.result.previewUrl);
-        setWorkspaceStatus("preview_ready");
-        setTerminalOutput((prev) => `${prev}\n\n[Git Provider] Created PR #${data.result.pullRequest.number} and Vercel Preview: ${data.result.previewUrl}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Pull Request creation failed");
+      setPullRequest({
+        number: data.pullRequest.number,
+        url: data.pullRequest.url,
+        branch: data.pullRequest.branch,
+        status: data.pullRequest.status,
+      });
+      setPreviewUrl(data.previewUrl || null);
+      setWorkspaceStatus(data.previewStatus === "ready" ? "preview_ready" : data.previewStatus === "building" ? "preview_building" : "pr_created");
+      setTerminalOutput((prev) => `${prev}\n\n[Git Provider] Created PR #${data.pullRequest.number}. Preview status: ${data.previewStatus}.`);
+
+      if (data.previewStatus !== "ready") {
+        const deadline = Date.now() + 10 * 60 * 1000;
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          const previewRes = await fetch(`/api/workspaces/${workspaceId}/preview`, { cache: "no-store" });
+          const previewData = await previewRes.json();
+          if (!previewRes.ok) break;
+          if (previewData.previewUrl) setPreviewUrl(previewData.previewUrl);
+          if (previewData.status === "ready") {
+            setWorkspaceStatus("preview_ready");
+            setTerminalOutput((prev) => `${prev}\n[Vercel] Real preview deployment is READY: ${previewData.previewUrl}`);
+            break;
+          }
+          if (previewData.status === "error" || previewData.status === "canceled") {
+            setTerminalOutput((prev) => `${prev}\n[Vercel] Preview deployment ${previewData.status}.`);
+            break;
+          }
+        }
       }
     } catch (err) {
-      console.error(err);
+      const message = err instanceof Error ? err.message : "Pull Request creation failed";
+      setTerminalOutput((prev) => `${prev}\n[PR Error] ${message}`);
     } finally {
       setIsCreatingPr(false);
     }
@@ -225,19 +321,31 @@ export default function RepairWorkspacePage() {
       const res = await fetch(`/api/workspaces/${workspaceId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          organizationId: "00000000-0000-0000-0000-000000000001",
-          userId: "user_owner",
-          approvalNotes: notes,
-        }),
+        body: JSON.stringify({ approved: true, reason: notes }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setWorkspaceStatus("completed");
-        setTerminalOutput((prev) => `${prev}\n\n[Production Gate] APPROVED & MERGED to production. Deployment live at: ${data.result.productionUrl}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Production approval/merge failed");
+      setWorkspaceStatus("merged");
+      setTerminalOutput((prev) => `${prev}\n\n[Production Gate] APPROVED & MERGED at ${data.result.mergeCommitSha || "unknown SHA"}. Waiting for exact Vercel production deployment evidence.`);
+
+      const deadline = Date.now() + 15 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        const productionRes = await fetch(`/api/workspaces/${workspaceId}/production`, { cache: "no-store" });
+        const productionData = await productionRes.json();
+        if (!productionRes.ok) throw new Error(productionData?.error || "Unable to observe production deployment");
+        if (!productionData.observed) continue;
+        setTerminalOutput((prev) => `${prev}\n[Vercel Production] ${productionData.status}: ${productionData.productionUrl || "URL unavailable"}`);
+        if (productionData.status === "ready") {
+          setWorkspaceStatus("completed");
+          return;
+        }
+        if (productionData.status === "error" || productionData.status === "canceled") return;
       }
+      setTerminalOutput((prev) => `${prev}\n[Vercel Production] Observation timed out. Workspace remains merged and can be refreshed later.`);
     } catch (err) {
-      console.error(err);
+      const message = err instanceof Error ? err.message : "Production approval/merge failed";
+      setTerminalOutput((prev) => `${prev}\n[Production Gate Error] ${message}`);
     } finally {
       setIsApproving(false);
     }
@@ -269,7 +377,7 @@ export default function RepairWorkspacePage() {
                 Status: {workspaceStatus}
               </Badge>
               <span className="text-[11px] text-muted-foreground font-mono">
-                Agent workspace: changes remain uncommitted until deterministic validation is wired
+                Agent changes remain isolated until real validation, PR, preview, and human approval gates pass
               </span>
               {triggerRunId ? (
                 <span className="text-[11px] text-muted-foreground font-mono">
@@ -379,8 +487,8 @@ export default function RepairWorkspacePage() {
 
       {activeTab === "terminal" && (
         <div className="space-y-3">
-          <Alert variant="warning" title="Real Vercel Sandbox is not wired yet">
-            Command execution is disabled so the platform cannot fabricate test/build output. The next phase must implement real @vercel/sandbox execution.
+          <Alert variant="info" title="Isolated Vercel Sandbox">
+            Commands execute only inside this workspace sandbox through the project allowlist. Output below comes from the real sandbox process.
           </Alert>
           <div className="flex items-center gap-2 flex-wrap pb-2">
             <span className="text-xs font-semibold text-muted-foreground">Execute Allowed Command:</span>
@@ -388,7 +496,7 @@ export default function RepairWorkspacePage() {
               size="sm"
               variant="outline"
               onClick={() => handleRunCommand("test")}
-              disabled
+              disabled={isExecutingCommand || workspaceStatus === "stopped" || workspaceStatus === "completed"}
             >
               npm test
             </Button>
@@ -396,7 +504,7 @@ export default function RepairWorkspacePage() {
               size="sm"
               variant="outline"
               onClick={() => handleRunCommand("lint")}
-              disabled
+              disabled={isExecutingCommand || workspaceStatus === "stopped" || workspaceStatus === "completed"}
             >
               npm run lint
             </Button>
@@ -404,7 +512,7 @@ export default function RepairWorkspacePage() {
               size="sm"
               variant="outline"
               onClick={() => handleRunCommand("typecheck")}
-              disabled
+              disabled={isExecutingCommand || workspaceStatus === "stopped" || workspaceStatus === "completed"}
             >
               tsc --noEmit
             </Button>
@@ -412,7 +520,7 @@ export default function RepairWorkspacePage() {
               size="sm"
               variant="outline"
               onClick={() => handleRunCommand("build")}
-              disabled
+              disabled={isExecutingCommand || workspaceStatus === "stopped" || workspaceStatus === "completed"}
             >
               npm run build
             </Button>
@@ -420,7 +528,7 @@ export default function RepairWorkspacePage() {
               size="sm"
               variant="outline"
               onClick={() => handleRunCommand("git_status")}
-              disabled
+              disabled={isExecutingCommand || workspaceStatus === "stopped"}
             >
               git status
             </Button>
@@ -436,7 +544,6 @@ export default function RepairWorkspacePage() {
           onRunValidation={handleRunValidation}
           isRunning={isValidating}
           result={validationResult}
-          blockedReason="Deterministic validation is intentionally blocked until real @vercel/sandbox install/test/lint/typecheck/build execution is available."
         />
       )}
 
@@ -449,7 +556,6 @@ export default function RepairWorkspacePage() {
           onApproveAndMerge={handleApproveAndMerge}
           isCreatingPr={isCreatingPr}
           isApproving={isApproving}
-          blockedReason="PR creation and production merge are intentionally blocked until OpenHands changes are validated in a real sandbox and pushed with the real GitHub App workflow."
         />
       )}
     </div>

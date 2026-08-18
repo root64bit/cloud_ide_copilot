@@ -1,75 +1,69 @@
-# OpenHands Cloud + Trigger.dev Integration
+# OpenHands Cloud + Trigger.dev
 
-## Responsibility split
+## Roles
 
-```text
-Vercel / Next.js control plane
-    -> authenticates operator (future production auth gate)
-    -> diagnoses incident through OpenRouter
-    -> queues Trigger.dev task
+- **OpenHands Cloud**: coding agent and repository working-copy analysis/repair.
+- **OpenRouter**: model gateway used by the platform/OpenHands configuration.
+- **Trigger.dev**: durable OpenHands job execution and repair-artifact persistence.
+- **Vercel Sandbox**: deterministic validation/shipping workspace, controlled by the Vercel-hosted control plane in the current architecture.
 
-Trigger.dev worker
-    -> invokes OpenHands Cloud V1 API
-    -> waits for real agent execution
-    -> retrieves real Git changes and diffs
-    -> returns provider identifiers/output
-
-OpenHands Cloud
-    -> launches its coding sandbox
-    -> opens the selected GitHub repository/branch
-    -> executes the coding agent
-    -> leaves proposed changes uncommitted
-```
-
-This keeps long-running agent work outside the lifetime of a Next.js request.
-
-## OpenHands endpoints used
-
-The client is isolated in:
+## Required Trigger.dev worker environment
 
 ```text
-src/server/providers/agent/openhands-cloud.client.ts
+NEXT_PUBLIC_SUPABASE_URL
+SUPABASE_SECRET_KEY
+OPENHANDS_API_KEY
+OPENHANDS_API_URL=https://app.all-hands.dev
+OPENHANDS_MODEL=                 # optional
 ```
 
-It uses the OpenHands Cloud V1 app-conversation API for starting/polling conversations, follow-up messages, Git changes, and Git diffs.
+Deploy:
 
-The API key is never included in client-side output.
+```bash
+npm run trigger:deploy
+```
 
-## Trigger tasks
+## Health checks
 
-### `engineering-health-check`
+```bash
+npm run openhands:health
+npm run trigger:health
+```
 
-A minimal real task that proves a Trigger.dev worker executed.
+`trigger:health` talks directly to Trigger.dev. The HTTP `/api/trigger/health` route is intentionally authenticated and requires organization integration-management permission.
 
-### `openhands-repair`
+## Trigger -> OpenHands verification
 
-Receives JSON-serializable context:
+Use a persisted staging repair workspace and configure:
 
 ```text
-workspaceId
-repository owner/name
-branch
-incident title
-structured diagnosis
-optional operator instruction
+OPENHANDS_VERIFY_WORKSPACE_ID
+OPENHANDS_VERIFY_ORGANIZATION_ID
+OPENHANDS_VERIFY_PROJECT_ID
+OPENHANDS_VERIFY_INCIDENT_ID
+OPENHANDS_TEST_REPOSITORY=owner/repository
+OPENHANDS_TEST_BRANCH=main
 ```
 
-It starts OpenHands and returns:
+Then:
+
+```bash
+npm run verify:trigger-openhands
+```
+
+The verification task requests read-only inspection. It must not commit, push, create a PR, or deploy.
+
+## Repair workflow
 
 ```text
-provider
-externalRunId
-conversationId
-sandboxId
-conversationUrl
-executionStatus
-modifiedFiles
-unified diff
-repairPlan (UI compatibility projection)
+Vercel API queues openhands-repair
+ -> Trigger.dev worker checks persisted workspace/tenant/project/incident identity
+ -> OpenHands Cloud conversation runs
+ -> real diff retrieved
+ -> secret-sensitive repair is rejected if detected
+ -> repair artifact stored in Supabase
+ -> Vercel control plane syncs artifact into Vercel Sandbox
+ -> deterministic validation begins
 ```
 
-## Important limitation
-
-The OpenHands sandbox is not yet the deterministic validation sandbox.
-
-The intended next implementation is to retrieve the OpenHands unified diff and apply it to a real Vercel Sandbox workspace. The Vercel Sandbox becomes the release authority for tests/build checks; OpenHands remains the coding agent.
+Reserved Trigger tasks for workspace lifecycle/validation/cleanup/Sentry auto-diagnosis currently fail closed where a machine-actor or external-Sandbox credential policy has not yet been approved.

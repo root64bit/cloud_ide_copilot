@@ -1,51 +1,61 @@
-# Sandbox Architecture & Browser IDE
+# Vercel Sandbox Architecture & Browser IDE
 
 ## Current status
 
-`SandboxProvider` and command-safety utilities exist, but the current `VercelSandboxProvider` is still a simulation and must **not** be treated as real release evidence.
+`VercelSandboxProvider` is a real `@vercel/sandbox` implementation.
 
-The real `@vercel/sandbox` implementation is a required next phase.
+It supports:
 
-## Intended isolation model
+- isolated persistent sandbox creation
+- private GitHub repository clone using a short-lived GitHub App installation token
+- exact base-commit checkout
+- credential scrubbing from the Git remote
+- allowlisted command execution
+- safe workspace path enforcement
+- file read/write
+- `git apply --check` before patch application
+- Sandbox stop
+- repair-branch commit/push with temporary Git credentials
 
-Each repair should receive its own isolated workspace containing:
+The browser IDE/code-server portion is intentionally **not implemented** yet.
 
-```text
-selected repository
-selected base commit
-repair branch context
-safe/staging environment variables only
-package manager/toolchain
-allowlisted validation commands
-```
-
-Production credentials must not be copied into the sandbox by default.
-
-## Intended OpenHands -> validation handoff
-
-OpenHands Cloud is currently a separate coding-agent execution environment. The target deterministic flow is:
+## OpenHands -> deterministic validation handoff
 
 ```text
 OpenHands Cloud
   -> real uncommitted Git diff
-  -> retrieve diff through OpenHands V1 API
-  -> create deterministic Vercel Sandbox
-  -> clone the same repository/base commit
-  -> apply the diff
-  -> actual install/test/lint/typecheck/build
+  -> persist repair artifact in Supabase
+  -> Vercel-hosted control plane retrieves artifact
+  -> existing exact-commit Vercel Sandbox
+  -> git apply --check
+  -> apply patch
+  -> install/test/lint/typecheck/build
   -> persist real exit codes/output
 ```
 
-OpenHands output alone is never proof that a test/build passed.
+OpenHands test claims are never the release authority; deterministic Sandbox exit codes are.
 
-## Command safety
+## Secret boundaries
 
-`src/lib/security/allowlist.ts` provides the existing allowlist/shell-injection boundary. When real Sandbox execution is added, all platform-triggered commands must pass through the allowlist and their output must be truncated/redacted before persistence.
+- Production application secrets are not automatically copied into repair Sandboxes.
+- GitHub installation credentials are temporary and removed from the Git remote after use.
+- Secret/environment/private-key file modifications are rejected before agent repair artifacts are persisted and again before Git shipping.
+- Command output is truncated and redacted before persistence.
+
+## Authentication
+
+When the control plane runs on Vercel, Sandbox operations should use Vercel deployment identity/OIDC. External workers need explicit Vercel Sandbox credentials if they are ever allowed to operate the Sandbox directly.
 
 ## Browser IDE
 
-code-server remains planned/partial. The final IDE must be scoped to the isolated repair workspace, protected by authenticated short-lived access, and must never point at a production filesystem.
+`getBrowserIdeUrl()` currently fails closed with `CODE_SERVER_NOT_WIRED`. Future code-server access must:
+
+- bind to one repair Sandbox only
+- use a short-lived authenticated access mechanism
+- never expose production filesystems/secrets
+- be revocable when the workspace stops/expires
+- work acceptably on mobile/tablet while the main UI covers common repair actions without requiring the full IDE
 
 ## Future alternative
 
-CubeSandbox may be considered later behind `SandboxProvider` if self-hosting, cost, scale, or cloud independence justify replacing Vercel Sandbox.
+CubeSandbox can remain behind the provider interface as a future self-hosted/scale/cost alternative.

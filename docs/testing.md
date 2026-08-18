@@ -1,8 +1,8 @@
-# Testing & Verification Strategy
+# Testing & Verification
 
-The project has Vitest unit/integration tests for security primitives, RBAC/state logic, providers, and workflow concepts.
+## Local/CI quality pipeline
 
-## Standard local checks
+After a clean install:
 
 ```bash
 npm ci
@@ -12,67 +12,55 @@ npm run lint
 npm run build
 ```
 
-## Provider verification added in the OpenHands/Trigger.dev update
+Do not use older revision results as proof for a changed release.
 
-### OpenHands Cloud API reachability
+## Provider smoke tests
+
+With third-party environments configured:
 
 ```bash
 npm run openhands:health
-```
-
-Requires a local `OPENHANDS_API_KEY` and performs a safe API health call.
-
-### Trigger.dev worker
-
-```bash
 npm run trigger:health
+npm run verify:trigger-openhands
 ```
 
-Queues `engineering-health-check`. A real pass requires the run to exist in Trigger.dev and complete from a Trigger.dev worker.
+The Trigger/OpenHands integration test must use a real persisted staging workspace and the environment identifiers documented in `docs/openhands-trigger-setup.md`.
 
-### Trigger.dev -> OpenHands
+## Deterministic release evidence
 
-```bash
-OPENHANDS_TEST_REPOSITORY=root64bit/cloud-ide-copilot npm run verify:trigger-openhands
-```
-
-The task is explicitly instructed to inspect only and make no repository changes.
-
-A real pass requires both:
+For a controlled staging defect, prove:
 
 ```text
-real Trigger.dev run ID
-real OpenHands conversation ID
+workspace created at exact Git commit
+repair artifact applied with git apply --check
+install exit code = 0
+test exit code = 0
+lint exit code = 0
+typecheck exit code = 0
+build exit code = 0
+repair branch pushed
+PR created
+Vercel Preview observed READY
+human approval recorded
+GitHub merge SHA recorded
+matching Vercel Production deployment observed READY
+workspace completed
 ```
 
-and both must be visible in their provider dashboards.
+## Current audit-environment limitation
 
-## Test doubles
+The handoff ZIP excludes dependencies. During the latest external audit, dependency installation did not complete in time, so full test/typecheck/lint/build results for this exact revision are not claimed. A parser-only TypeScript/TSX scan is used only to catch syntax-class errors and is not a substitute for the real pipeline.
 
-Mock providers may be used in unit tests. They must not be interpreted as production provider verification.
+## Next test layer
 
-OpenRouter mock responses are now restricted to test mode or explicit `ALLOW_MOCK_PROVIDERS=true`.
-
-## Important current limitation
-
-Some existing integration tests exercise the in-memory service layer and simulated sandbox/PR workflow. They validate logic/state transitions, not real Supabase/Vercel/GitHub cloud execution.
-
-The production-readiness suite must be expanded after the real persistence and Vercel Sandbox phases.
-
-## Planned triple-audit release verification
-
-For major changes, the target release gate is:
+Triple Audit will add:
 
 ```text
-Layer 1: deterministic engineering
-  tests + lint + typecheck + build + security scans
-
-Layer 2: browser QA
-  Playwright -> Stagehand -> OmniParser fallback
-  followed by deterministic DOM/API/DB assertions
-
-Layer 3: independent AI review
-  multiple approved OpenRouter models
-
-Then: explicit human ship approval
+Playwright deterministic interaction
+ -> Stagehand semantic fallback
+ -> OmniParser visual fallback
+ -> Playwright controlled action
+ -> DOM/API/DB deterministic assertion
 ```
+
+plus independent multi-model code/security/architecture review and a machine-readable release gate.

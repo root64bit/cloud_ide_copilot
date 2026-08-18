@@ -1,5 +1,5 @@
 import { redactObject } from "../security/redaction";
-import { InMemoryDatabase } from "../supabase/server";
+import { AuditEventRepo } from "../supabase/repositories";
 import type { Json } from "../supabase/types";
 
 export interface AuditEventInput {
@@ -13,17 +13,11 @@ export interface AuditEventInput {
 }
 
 export class AuditLogger {
-  /**
-   * Logs a structured audit event into the database.
-   * All metadata is automatically passed through the secret redaction engine.
-   */
   public static async log(event: AuditEventInput): Promise<{ id: string; timestamp: string }> {
     const sanitizedMetadata = redactObject(event.metadata || {}) as Json;
     const timestamp = new Date().toISOString();
-    const id = `audit_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-    const record = {
-      id,
+    const record = await AuditEventRepo.create({
       organization_id: event.organizationId,
       project_id: event.projectId || null,
       workspace_id: event.workspaceId || null,
@@ -32,21 +26,12 @@ export class AuditLogger {
       metadata: sanitizedMetadata,
       ip_hash: event.ipHash || null,
       created_at: timestamp,
-    };
+    });
 
-    // Store in in-memory instance (or Supabase in production)
-    InMemoryDatabase.getInstance().auditEvents.unshift(record);
-
-    return { id, timestamp };
+    return { id: record.id, timestamp: record.created_at || timestamp };
   }
 
-  /**
-   * Retrieves audit events scoped to a specific organization.
-   */
   public static async getEvents(organizationId: string, limit = 50) {
-    const events = InMemoryDatabase.getInstance().auditEvents.filter(
-      (e) => e.organization_id === organizationId
-    );
-    return events.slice(0, limit);
+    return AuditEventRepo.listByOrg(organizationId, limit);
   }
 }
