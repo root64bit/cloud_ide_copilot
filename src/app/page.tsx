@@ -16,20 +16,32 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function RootPage() {
+  let shouldRedirectUrl: string | null = null;
   let userOrgSlug: string | null = null;
   try {
     const user = await getAuthenticatedUser();
     const memberships = await OrganizationMemberRepo.listByUser(user.id);
     if (memberships.length > 0) {
       const org = await OrganizationRepo.findById(memberships[0].organization_id);
-      if (org) userOrgSlug = org.slug;
+      if (org) {
+        shouldRedirectUrl = `/${org.slug}`;
+        userOrgSlug = org.slug;
+      }
+    }
+    if (!shouldRedirectUrl) {
+      shouldRedirectUrl = "/onboarding";
     }
   } catch {
     // Unauthenticated visitors will see full landing page with conversion CTAs
+  }
+
+  if (shouldRedirectUrl) {
+    redirect(shouldRedirectUrl);
   }
 
   return (
