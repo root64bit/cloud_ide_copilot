@@ -1,3 +1,5 @@
+import { FaqAndComparisonSection } from "@/components/landing/faq-section";
+import { PricingSection } from "@/components/landing/pricing-section";
 import { getAuthenticatedUser } from "@/lib/supabase/auth";
 import { OrganizationMemberRepo, OrganizationRepo } from "@/lib/supabase/repositories";
 import {
@@ -6,9 +8,7 @@ import {
   Box,
   CheckCircle2,
   Code2,
-  ExternalLink,
   GitPullRequest,
-  Lock,
   Play,
   ShieldCheck,
   Sparkles,
@@ -29,7 +29,7 @@ export default async function RootPage() {
       if (org) userOrgSlug = org.slug;
     }
   } catch {
-    // Unauthenticated visitors will see landing page with login CTAs
+    // Unauthenticated visitors will see full landing page with conversion CTAs
   }
 
   return (
@@ -52,7 +52,9 @@ export default async function RootPage() {
           <nav className="hidden md:flex items-center gap-6 text-sm text-[#94A3B8]">
             <a href="#features" className="hover:text-[#00E5FF] transition-colors">Capabilities</a>
             <a href="#copilot-demo" className="hover:text-[#00E5FF] transition-colors">Copilot IDE</a>
-            <a href="#architecture" className="hover:text-[#00E5FF] transition-colors">Architecture</a>
+            <a href="#pricing" className="hover:text-[#00E5FF] transition-colors">Pricing</a>
+            <a href="#comparison" className="hover:text-[#00E5FF] transition-colors">Comparison</a>
+            <a href="#faq" className="hover:text-[#00E5FF] transition-colors">FAQ</a>
           </nav>
         </div>
 
@@ -60,7 +62,7 @@ export default async function RootPage() {
           {userOrgSlug ? (
             <Link
               href={`/${userOrgSlug}`}
-              className="bg-[#00E5FF] text-[#00363D] hover:bg-[#00E5FF]/90 font-medium text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(0,229,255,0.25)]"
+              className="bg-[#00E5FF] text-[#00363D] hover:bg-[#00E5FF]/90 font-medium text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(0,229,255,0.25)] font-bold"
             >
               Open Dashboard
               <ArrowRight className="w-3.5 h-3.5" />
@@ -75,7 +77,7 @@ export default async function RootPage() {
               </Link>
               <Link
                 href="/onboarding"
-                className="bg-[#00E5FF] text-[#00363D] hover:bg-[#00E5FF]/90 font-medium text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(0,229,255,0.25)]"
+                className="bg-[#00E5FF] text-[#00363D] hover:bg-[#00E5FF]/90 font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(0,229,255,0.25)]"
               >
                 Get Started
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -86,7 +88,7 @@ export default async function RootPage() {
       </header>
 
       {/* Hero Section */}
-      <main className="flex-1 pt-24 pb-16">
+      <main className="flex-1 pt-24 pb-16 space-y-16">
         <section className="relative px-6 lg:px-12 py-16 lg:py-24 max-w-7xl mx-auto flex flex-col items-center text-center">
           {/* Subtle Glow Background */}
           <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#00E5FF]/10 rounded-full blur-3xl pointer-events-none -z-10" />
@@ -118,15 +120,15 @@ export default async function RootPage() {
               Launch Cloud Workspace
             </Link>
             <a
-              href="#copilot-demo"
-              className="w-full sm:w-auto bg-[#090D16] border border-[#1E293B] hover:border-[#00E5FF]/50 text-[#CBD5E1] hover:text-white text-sm px-6 py-3.5 rounded-lg flex items-center justify-center gap-2 transition-all"
+              href="#pricing"
+              className="w-full sm:w-auto bg-[#090D16] border border-[#1E293B] hover:border-[#00E5FF]/50 text-[#CBD5E1] hover:text-white text-sm px-6 py-3.5 rounded-lg flex items-center justify-center gap-2 transition-all font-mono"
             >
-              <Play className="w-3.5 h-3.5 text-[#00E5FF]" />
-              Explore Interactive IDE
+              <Zap className="w-3.5 h-3.5 text-[#00E5FF]" />
+              View Pricing Plans
             </a>
           </div>
 
-          {/* Stats / Key Badges */}
+          {/* Social Proof & Metrics Bar */}
           <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl pt-8 border-t border-[#1E293B]/60 text-left">
             <div className="p-3 bg-[#0B1018] rounded-lg border border-[#1E293B]">
               <div className="text-xs text-[#64748B] font-mono">Agent Backend</div>
@@ -155,7 +157,7 @@ export default async function RootPage() {
           </div>
         </section>
 
-        {/* Live Copilot IDE Teaser Section */}
+        {/* Live Copilot IDE Teaser Section (Stitch Screen 1) */}
         <section id="copilot-demo" className="px-6 lg:px-12 py-12 max-w-7xl mx-auto">
           <div className="text-center mb-8">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
@@ -330,6 +332,12 @@ export default async function RootPage() {
             </div>
           </div>
         </section>
+
+        {/* Tiered Pricing Plans Section */}
+        <PricingSection userOrgSlug={userOrgSlug} />
+
+        {/* Comparison Matrix, FAQs, and Bottom Conversion CTA */}
+        <FaqAndComparisonSection userOrgSlug={userOrgSlug} />
       </main>
 
       {/* Footer */}
@@ -341,6 +349,7 @@ export default async function RootPage() {
         <div className="flex items-center gap-6">
           <Link href="/login" className="hover:text-white transition-colors">Sign In</Link>
           <Link href="/onboarding" className="hover:text-white transition-colors">Create Organization</Link>
+          <a href="#pricing" className="hover:text-white transition-colors">Pricing Plans</a>
           <span>&copy; {new Date().getFullYear()} OQVEN Platform</span>
         </div>
       </footer>
