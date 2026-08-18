@@ -162,7 +162,7 @@ export class OrganizationMemberRepo {
   }
 
   static async create(data: Database["public"]["Tables"]["organization_members"]["Insert"]) {
-    const id = data.id || `mem_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const id = data.id || crypto.randomUUID();
     const row = {
       ...data,
       id,
@@ -553,7 +553,7 @@ export class WorkspaceRepo {
   }
 
   static async create(data: Database["public"]["Tables"]["repair_workspaces"]["Insert"]) {
-    const id = data.id || `ws_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const id = data.id || crypto.randomUUID();
     const row = {
       ...data,
       id,
@@ -680,7 +680,7 @@ export class RepairArtifactRepo {
   }
 
   static async create(data: Database["public"]["Tables"]["repair_artifacts"]["Insert"]) {
-    const id = data.id || `art_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const id = data.id || crypto.randomUUID();
     const row = {
       ...data,
       id,
@@ -724,7 +724,7 @@ export class CommandRunRepo {
   }
 
   static async create(data: Database["public"]["Tables"]["command_runs"]["Insert"]) {
-    const id = data.id || `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const id = data.id || crypto.randomUUID();
     const row = {
       ...data,
       id,
@@ -767,7 +767,7 @@ export class PullRequestRepo {
   }
 
   static async create(data: Database["public"]["Tables"]["pull_requests"]["Insert"]) {
-    const id = data.id || `pr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const id = data.id || crypto.randomUUID();
     const row = {
       ...data,
       id,
@@ -904,7 +904,7 @@ export class DeploymentRepo {
   }
 
   static async create(data: Database["public"]["Tables"]["deployments"]["Insert"]) {
-    const id = data.id || `dpl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const id = data.id || crypto.randomUUID();
     const row = {
       ...data,
       id,
