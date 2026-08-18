@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Building2 } from "lucide-react";
+import { Building2, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 
@@ -38,21 +39,31 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="min-h-screen grid place-items-center bg-background px-4">
-      <Card className="w-full max-w-lg border-primary/20">
+    <main className="min-h-screen grid place-items-center bg-[#070A10] px-4">
+      <Card className="w-full max-w-lg border-[#1E293B] bg-[#0B1018] shadow-2xl">
         <CardHeader className="space-y-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center text-primary"><Building2 className="w-5 h-5" /></div>
+          <Link href="/" className="flex items-center gap-2 mb-2 group">
+            <div className="w-10 h-10 rounded-xl bg-[#00E5FF]/10 border border-[#00E5FF]/30 grid place-items-center text-[#00E5FF] group-hover:scale-105 transition-transform">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="font-mono font-bold text-lg text-white">OQVEN</span>
+              <p className="text-[10px] text-[#64748B]">Give it a task. Get working code.</p>
+            </div>
+          </Link>
           <div>
-            <CardTitle>Create your engineering organization</CardTitle>
-            <p className="text-xs text-muted-foreground mt-1">Projects, incidents, workspaces, audit evidence, and usage remain tenant-scoped.</p>
+            <CardTitle className="text-white">Create your engineering organization</CardTitle>
+            <p className="text-xs text-[#94A3B8] mt-1">Projects, incidents, workspaces, and release gates remain tenant-scoped.</p>
           </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="space-y-4">
             <Input label="Organization name" value={name} onChange={(e) => setName(e.target.value)} required />
             <Input label="URL slug" value={slug} onChange={(e) => setSlugOverride(e.target.value.toLowerCase())} required />
-            {error && <p className="text-xs text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" isLoading={loading}>Create organization</Button>
+            {error && <p className="text-xs text-[#EF4444]">{error}</p>}
+            <Button type="submit" className="w-full bg-[#00E5FF] text-[#00363D] hover:bg-[#00E5FF]/90 font-bold" isLoading={loading}>
+              Create Organization
+            </Button>
           </form>
         </CardContent>
       </Card>

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI Engineering Platform",
-  description: "Multi-tenant cloud engineering copilot, error triage, and automated repair sandbox.",
+  title: "OQVEN — Give it a task. Get working code.",
+  description: "OQVEN: Autonomous & interactive AI engineering platform with isolated sandboxes, deterministic validation, and human-in-the-loop release gates.",
 };
 
 export default function RootLayout({

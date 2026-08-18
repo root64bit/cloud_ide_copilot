@@ -9,6 +9,7 @@ import {
   History,
   LayoutDashboard,
   Settings,
+  Sparkles,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -36,17 +37,17 @@ export function Sidebar({
   ];
 
   return (
-    <aside className="hidden md:flex flex-col w-64 border-r border-border bg-card/60 shrink-0 h-screen sticky top-0">
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-primary font-bold text-sm">
-            AI
+    <aside className="hidden md:flex flex-col w-64 border-r border-border-subtle bg-surface-elevated shrink-0 h-screen sticky top-0">
+      <div className="p-4 border-b border-border-subtle">
+        <Link href={`/${orgSlug}`} className="flex items-center gap-2 mb-3 group">
+          <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-primary font-bold text-sm group-hover:scale-105 transition-transform">
+            <Sparkles className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-tight">AI Copilot</h1>
-            <p className="text-[10px] text-muted-foreground">Engineering Platform</p>
+            <h1 className="text-sm font-bold tracking-tight text-text-primary group-hover:text-primary transition-colors">OQVEN</h1>
+            <p className="text-[10px] text-text-muted">Give it a task. Get working code.</p>
           </div>
-        </div>
+        </Link>
         <OrgSwitcher currentOrgSlug={orgSlug} organizations={organizations} />
       </div>
 
@@ -61,11 +62,11 @@ export function Sidebar({
                 "flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors",
                 isActive
                   ? "bg-primary/10 text-primary font-semibold border-l-2 border-primary"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  : "text-text-muted hover:bg-surface-container hover:text-text-primary"
               )}
             >
               <div className="flex items-center gap-2.5">
-                <item.icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
+                <item.icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-text-muted")} />
                 <span>{item.name}</span>
               </div>
             </Link>
@@ -73,14 +74,14 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="p-3 border-t border-border/80 bg-card/40">
-        <div className="rounded-lg border border-border/60 p-2.5 bg-secondary/30">
-          <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            Isolated repair execution
+      <div className="p-3 border-t border-border-subtle bg-surface-container/40">
+        <div className="rounded-lg border border-border-subtle p-2.5 bg-surface-container-high/60">
+          <div className="flex items-center gap-2 text-xs font-semibold text-text-primary">
+            <span className="pulse-dot" />
+            Deterministic Sandbox
           </div>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
-            Vercel Sandbox is created only when a workspace is launched.
+          <p className="text-[10px] text-text-muted mt-0.5">
+            Isolated execution with exact commit validation and PR release gate.
           </p>
         </div>
       </div>

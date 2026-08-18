@@ -10,8 +10,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        background: "#070A10",
+        foreground: "#F8FAFC",
+        "surface-container": "#0B1018",
+        "surface-container-high": "#111827",
+        "surface-elevated": "#090D16",
+        "border-subtle": "#1E293B",
+        "text-primary": "#F8FAFC",
+        "text-secondary": "#CBD5E1",
+        "text-muted": "#64748B",
+        "status-success": "#22C55E",
+        "status-error": "#EF4444",
+        "status-warning": "#F59E0B",
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
@@ -21,8 +31,8 @@ const config: Config = {
           foreground: "hsl(var(--popover-foreground))",
         },
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "#00E5FF",
+          foreground: "#00363D",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -37,12 +47,12 @@ const config: Config = {
           foreground: "hsl(var(--accent-foreground))",
         },
         destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+          DEFAULT: "#EF4444",
+          foreground: "#FFFFFF",
         },
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
+        border: "#1E293B",
+        input: "#1E293B",
+        ring: "#00E5FF",
       },
       borderRadius: {
         lg: "var(--radius)",
